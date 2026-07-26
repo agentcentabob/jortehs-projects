@@ -1,4 +1,4 @@
-import api from '../master/api.js';
+import api from '../api.js';
 
 class MetroDepartureBoard {
     constructor() {

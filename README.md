@@ -25,4 +25,5 @@ reused and adopted for my design and technology student negotiated project with 
 - [ ] complete alternative metro board design
     - [ ] change colours
     - [ ] change provided information
-- [ ] simplify file layout following claude changes
+    - [ ] make station search bar display all metro stations and platforms
+- [ ] simplify file layout following claude changes 

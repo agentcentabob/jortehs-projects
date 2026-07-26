@@ -135,14 +135,14 @@ class TfNSWAPI {
             'Ferry': '--ferry'
         };
 
-        // First try exact match
+        // first try exact match
         const varName = varMap[lineName];
         if (varName) {
             const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
             if (value) return value;
         }
 
-        // Try partial matches
+        // try partial matches
         for (const [key, vname] of Object.entries(varMap)) {
             if (lineName.includes(key) || key.includes(lineName)) {
                 const value = getComputedStyle(document.documentElement).getPropertyValue(vname).trim();
@@ -151,10 +151,10 @@ class TfNSWAPI {
         }
 
         // fallback to default orange
-        return getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || '#ffa900';
+        return getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || '#a0a0a0';
     }
 
-    // Format time for display
+    // format time for display
     formatTime(datetime) {
         const date = new Date(datetime);
         return date.toLocaleTimeString('en-AU', {
@@ -164,7 +164,7 @@ class TfNSWAPI {
         });
     }
 
-    // Get minutes until departure
+    // get minutes until departure
     getMinutesUntil(datetime) {
         const now = new Date();
         const departure = new Date(datetime);
@@ -172,20 +172,20 @@ class TfNSWAPI {
         return diff;
     }
 
-    // Extract short line name (T4, F1, L2, etc)
+    // extract short line name (T4, F1, L2, etc)
     getShortLineName(lineName) {
         if (!lineName) return 'Unknown';
 
-        // Remove spaces and convert to uppercase
+        // remove spaces and convert to uppercase
         let short = lineName.trim().toUpperCase();
 
-        // Extract just the line identifier (T1, F2, L3, etc)
+        // extract just the line identifier (T1, F2, L3, etc)
         const match = short.match(/([TFL])(\d+|[A-Z]+)/);
         if (match) {
             return match[1] + match[2];
         }
 
-        // Try other patterns
+        // try other patterns
         if (short.includes('METRO')) return 'Metro';
         if (short.includes('BUS')) return short.split(' ')[0];
         if (short.includes('TRAIN')) return 'Train';
