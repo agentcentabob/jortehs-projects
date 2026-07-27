@@ -210,7 +210,7 @@ class MetroDepartureBoard {
             }
 
             const shortLine = this.getShortLineName(dep.line);
-            const lineColor = api.getLineColor(dep.line);
+            const lineColor = api.getLineColor(dep.line, dep.mode);
             const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
 
             const shortPlatform = this.getShortPlatform(dep.platform);
@@ -224,7 +224,6 @@ class MetroDepartureBoard {
                 <div class="col-line" style="${lineStyle}">${this.escapeHtml(shortLine)}</div>
                 <div class="col-destination">
                     <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
-                    <div class="destination-info" style="font-style:italic;">${fleetInfo}${stoppingInfo}</div>
                 </div>
                 <div class="col-platform">${platformLabel}</div>
             `;

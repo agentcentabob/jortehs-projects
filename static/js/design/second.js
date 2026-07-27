@@ -238,7 +238,7 @@ class DepartureBoard {
                 }
 
                 const shortLine = this.getShortLineName(dep.line);
-                const lineColor = api.getLineColor(dep.line);
+                const lineColor = api.getLineColor(dep.line, dep.mode);
                 const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
 
                 const platformLabel = this.getPlatformLabel(dep);
@@ -252,7 +252,6 @@ class DepartureBoard {
                     <div class="col-line" style="${lineStyle}">${this.escapeHtml(shortLine)}</div>
                     <div class="col-destination">
                         <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
-                        <div class="destination-info" style="font-style:italic;">${fleetInfo}${stoppingInfo}</div>
                     </div>
                     <div class="col-platform">${platformLabel}</div>
                 `;
@@ -261,7 +260,7 @@ class DepartureBoard {
             });
         } catch (e) {
             console.error('Error rendering departures:', e);
-            this.departuresEl.innerHTML = '<p>Error rendering departures</p>';
+            this.departuresEl.innerHTML = '<p>Error displaying departures. Please try again.</p>';
         }
     }
 

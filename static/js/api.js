@@ -22,6 +22,21 @@ class TfNSWAPI {
         }
     }
 
+    // Search for stops by name
+    async searchStops(query) {
+        try {
+            const response = await fetch(`${this.backendUrl}/stops?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            const data = await response.json();
+            return Array.isArray(data.stops) ? data.stops : [];
+        } catch (error) {
+            console.error('Error searching stops:', error);
+            throw error;
+        }
+    }
+
     // Parse raw TfNSW departure response into standardized format
     parseDeparturesRaw(data) {
         const departures = [];
@@ -52,7 +67,7 @@ class TfNSWAPI {
 
     // Calculate delay in minutes
     calculateDelay(planned, estimated) {
-        const plannedTime = new Date(planned);
+        const plannedTime = new Date(plated);
         const estimatedTime = new Date(estimated);
         return Math.round((estimatedTime - plannedTime) / 60000);
     }
@@ -75,7 +90,11 @@ class TfNSWAPI {
     }
 
     // Map line names to their colors from styles.css
-    getLineColor(lineName) {
+    getLineColor(lineName, mode) {
+        // Ensure mode is a string for safety
+        const modeString = mode && typeof mode === 'string' ? mode : '';
+
+        // Create maps with lowercase keys for case-insensitive lookup
         const varMap = {
             // Rail lines
             'T1': '--t1',
@@ -107,8 +126,9 @@ class TfNSWAPI {
             'L3': '--l3',
             'L4': '--l4',
             'NLR': '--nlr',
-            // Meta
+            // Metro
             'Metro': '--metro',
+            // Fallbacks
             'SydneyTrains': '--sydneytrains',
             'NSWTL': '--nswtl',
             'Bus': '--bus',
@@ -116,22 +136,56 @@ class TfNSWAPI {
             'Ferry': '--ferry'
         };
 
-        // first try exact match
-        const varName = varMap[lineName];
-        if (varName) {
-            const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-            if (value) return value;
+        const lowerCaseMap = new Map();
+        for (const [key, value] of Object.entries(varMap)) {
+            lowerCaseMap.set(key.toLowerCase(), value);
         }
 
-        // try partial matches
-        for (const [key, vname] of Object.entries(varMap)) {
-            if (lineName.includes(key) || key.includes(lineName)) {
-                const value = getComputedStyle(document.documentElement).getPropertyValue(vname).trim();
-                if (value) return value;
+        // Normalize inputs
+        const nameKey = (lineName || '').toLowerCase();
+        const modeKey = (modeString || '').toLowerCase();
+
+        // Helper to get value from our map
+        const getValueFromMap = (key) => {
+            const value = lowerCaseMap.get(key);
+            if (value !== undefined) {
+                let result = getComputedStyle(document.documentElement).getPropertyValue(value).trim();
+                return result || null;
+            }
+            return null;
+        };
+
+        // 1. Try exact match on lineName
+        let result = getValueFromMap(nameKey);
+        if (result) return result;
+
+        // 2. Try partial matches on lineName
+        for (const [mapKey, value] of Object.entries(varMap)) {
+            const lowerMapKey = mapKey.toLowerCase();
+            if (nameKey.includes(lowerMapKey) || lowerMapKey.includes(nameKey)) {
+                let result = getValueFromMap(lowerMapKey);
+                if (result) return result;
             }
         }
 
-        // fallback to default orange
+        // 3. Try exact match on mode (if provided and not empty)
+        if (modeString) {
+            let result = getValueFromMap(modeKey);
+            if (result) return result;
+        }
+
+        // 4. Try partial matches on mode (if provided and not empty)
+        if (modeString) {
+            for (const [mapKey, value] of Object.entries(varMap)) {
+                const lowerMapKey = mapKey.toLowerCase();
+                if (modeKey.includes(lowerMapKey) || lowerMapKey.includes(modeKey)) {
+                    let result = getValueFromMap(lowerMapKey);
+                    if (result) return result;
+                }
+            }
+        }
+
+        // 5. Fallback to default orange
         return getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || '#a0a0a0';
     }
 }
