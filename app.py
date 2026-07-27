@@ -27,7 +27,6 @@ def board(board_name):
 @app.route('/api/departures', methods=['GET'])
 def get_departures():
     stop_id = request.args.get('stop_id')
-
     if not stop_id:
         return jsonify({'error': 'stop_id is required'}), 400
 

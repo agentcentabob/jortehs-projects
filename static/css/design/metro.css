@@ -1,5 +1,3 @@
-/* Metro departure board specific styles */
-
 .container {
     max-width: 1400px;
     margin: 0 auto;
@@ -9,25 +7,17 @@ header {
     background: #16213e;
     padding: 20px;
     border-radius: 10px;
-    margin-bottom: 20px;
+    margin: 10px;
 }
 
 header h1 {
-    margin: 0 0 15px 0;
     color: var(--white);
     font-size: 2em;
-}
-
-/* Metro-style header - time only in metro teal */
-.header-time {
-    color: var(--metro);
-    font-size: 1.5em;
-    font-weight: bold;
-    margin: 0 0 15px 0;
+    margin: 0px 0px 6px 0px;
 }
 
 .station-info {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     font-size: 1.1em;
     color: var(--white);
 }
@@ -38,7 +28,7 @@ header h1 {
 
 #stationId {
     color: var(--l-gray);
-    margin-left: 10px;
+    margin-left: 4px;
 }
 
 .back-link {
@@ -127,7 +117,7 @@ button {
 }
 
 button:hover {
-    background: var(--ontime);
+    background: var(--l-gray);
 }
 
 button:active {
@@ -135,7 +125,7 @@ button:active {
 }
 
 .status {
-    margin-top: 10px;
+    margin-top: 6px;
     font-size: 0.9em;
     color: var(--l-gray);
     min-height: 20px;
@@ -145,14 +135,15 @@ button:active {
     background: var(--white);
     border-radius: 10px;
     overflow: hidden;
+    margin: 10px;
 }
 
 .board-header {
     display: grid;
-    grid-template-columns: 80px 100px 1fr 100px;
+    grid-template-columns: 2fr 100px 80px;
     gap: 10px;
     padding: 15px 20px;
-    background: var(--dark-gray);
+    background: var(--metro);
     font-weight: bold;
     color: var(--white);
     border-bottom: 2px solid var(--l-gray);
@@ -186,7 +177,7 @@ button:active {
     font-weight: bold;
 }
 
-.departure-row .col-line {
+.departure-row .col-occp {
     color: #000;
     font-weight: bold;
     text-align: center;
@@ -195,13 +186,8 @@ button:active {
     padding: 2px 6px;
 }
 
-.departure-row .col-destination {
+.departure-row .col-dest {
     color: #000;
-}
-
-.departure-row .col-platform {
-    color: #000;
-    text-align: center;
 }
 
 @keyframes fadeIn {
@@ -215,7 +201,7 @@ button:active {
     }
 }
 
-.col-time {
+.col-dest, .col-occp, .col-time {
     font-weight: bold;
     color: var(--white);
 }
@@ -243,17 +229,6 @@ button:active {
     color: var(--major);
 }
 
-.col-line {
-    font-weight: bold;
-    text-align: center;
-    width: fit-content;
-}
-
-.col-destination {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .destination-main {
     white-space: nowrap;
     overflow: hidden;
@@ -268,11 +243,6 @@ button:active {
     text-overflow: ellipsis;
     margin-top: 2px;
     font-style: italic;
-}
-
-.col-platform {
-    text-align: center;
-    color: var(--white);
 }
 
 .no-departures {

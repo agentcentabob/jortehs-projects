@@ -11,7 +11,7 @@
     <div class="container">
         <header>
             <a href="/" class="back-link">← Back</a>
-            <div class="header-time" id="headerTime">time: --:--</div>
+            <h1 class="header" id="h1">Revised Metro Departure Board</h1>
             <div class="station-info" id="stationInfo" style="display: none;">
                 <span id="stationName"></span>
                 <span id="stationId"></span>
@@ -22,17 +22,16 @@
                     <div id="suggestions" class="suggestions-dropdown"></div>
                 </div>
                 <button id="loadBtn">Load Departures</button>
-                <button id="refreshBtn">Refresh</button>
+                <button id="refreshBtn">⟳</button>
             </div>
             <div class="status" id="status"></div>
         </header>
 
         <div class="board">
             <div class="board-header">
-                <div class="col-time">Time</div>
-                <div class="col-line">Line</div>
-                <div class="col-destination">Destination</div>
-                <div class="col-platform">Platform</div>
+                <div class="col-dest">Destination</div>
+                <div class="col-occp">(occup)</div>
+                <div class="col-time">Due</div>
             </div>
             <div id="departures" class="departures-list">
                 <!-- departures will be inserted here -->
