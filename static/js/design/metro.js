@@ -50,9 +50,11 @@ class MetroDepartureBoard {
     }
 
     updateHeaderTime() {
-        const now = api.getCurrentTimeFormatted();
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
         if (this.headerTimeEl) {
-            this.headerTimeEl.textContent = `time: ${now}`;
+            this.headerTimeEl.textContent = `time: ${hours}:${minutes}`;
         }
     }
 
@@ -136,7 +138,8 @@ class MetroDepartureBoard {
         this.emptyStateEl.style.display = 'none';
 
         try {
-            const departures = await api.getDepartures(this.stopId);
+            const rawData = await api.getDeparturesRaw(this.stopId);
+            const departures = api.parseDeparturesRaw(rawData);
             this.allDepartures = departures;
 
             if (departures.length === 0) {
@@ -187,7 +190,7 @@ class MetroDepartureBoard {
             const row = document.createElement('div');
             row.className = 'departure-row';
 
-            const minsUntil = api.getMinutesUntil(dep.departureTime);
+            const minsUntil = this.getMinutesUntil(dep.departureTime);
 
             let timeDisplay = '';
             if (minsUntil <= 2) {
@@ -206,11 +209,11 @@ class MetroDepartureBoard {
                 timeDisplay += ` <span class="time-delay delay-ontime">[on time]</span>`;
             }
 
-            const shortLine = api.getShortLineName(dep.line);
+            const shortLine = this.getShortLineName(dep.line);
             const lineColor = api.getLineColor(dep.line);
             const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
 
-            const shortPlatform = api.getShortPlatform(dep.platform);
+            const shortPlatform = this.getShortPlatform(dep.platform);
             const platformLabel = shortPlatform || '-';
 
             const fleetInfo = dep.fleetType ? ` ${dep.fleetType}` : '';
@@ -228,6 +231,59 @@ class MetroDepartureBoard {
 
             this.departuresEl.appendChild(row);
         });
+    }
+
+    // Helper methods (copied from original api.js)
+    getMinutesUntil(datetime) {
+        const now = new Date();
+        const departure = new Date(datetime);
+        const diff = Math.round((departure - now) / 60000);
+        return diff;
+    }
+
+    getShortLineName(lineName) {
+        if (!lineName) return 'Unknown';
+
+        // remove spaces and convert to uppercase
+        let short = lineName.trim().toUpperCase();
+
+        // extract just the line identifier (T1, F2, L3, etc)
+        const match = short.match(/([TFL])(\d+|[A-Z]+)/);
+        if (match) {
+            return match[1] + match[2];
+        }
+
+        // try other patterns
+        if (short.includes('METRO')) return 'Metro';
+        if (short.includes('BUS')) return short.split(' ')[0];
+        if (short.includes('TRAIN')) return 'Train';
+
+        // Return first 4 characters if nothing else matches
+        return short.substring(0, 4);
+    }
+
+    getShortPlatform(platformString) {
+        if (!platformString) return '-';
+
+        const str = platformString.trim().toUpperCase();
+
+        // For bus stops like "Stop A", "Stop B"
+        const busMatch = str.match(/STOP\s*([A-Z])/);
+        if (busMatch) return busMatch[1];
+
+        // For platforms like "Platform 1", "Platform 2"
+        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
+        if (platformMatch) return platformMatch[1];
+
+        // For numbered formats
+        const numMatch = str.match(/\d+/);
+        if (numMatch) return numMatch[0];
+
+        // For letter formats
+        const letterMatch = str.match(/[A-Z]/);
+        if (letterMatch) return letterMatch[0];
+
+        return platformString;
     }
 
     getContrastedTextColor(hexColor) {

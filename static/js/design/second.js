@@ -1,3 +1,4 @@
+// import api from '../api.js';
 import api from '../api.js';
 
 class DepartureBoard {
@@ -135,7 +136,8 @@ class DepartureBoard {
         this.emptyStateEl.style.display = 'none';
 
         try {
-            const departures = await api.getDepartures(this.stopId);
+            const rawData = await api.getDeparturesRaw(this.stopId);
+            const departures = api.parseDeparturesRaw(rawData);
             console.log('Fetched departures:', departures.length, departures);
             this.allDepartures = departures;
 
@@ -189,7 +191,7 @@ class DepartureBoard {
 
     // Return platform label with appropriate prefix based on mode
     getPlatformLabel(dep) {
-        const shortPlatform = api.getShortPlatform(dep.platform);
+        const shortPlatform = this.getShortPlatform(dep.platform);
         if (!shortPlatform) return '-';
         const mode = (dep.mode ?? '').toString().toLowerCase();
         if (mode === 'bus') {
@@ -216,33 +218,29 @@ class DepartureBoard {
                 const row = document.createElement('div');
                 row.className = 'departure-row';
 
-                const minsUntil = api.getMinutesUntil(dep.departureTime);
+                const time = this.formatTime(dep.departureTime);
+                const minsUntil = this.getMinutesUntil(dep.departureTime);
 
-                // Format time display: "mins until" in white, then "[delay]" in colored brackets
-                let timeDisplay = '';
+                let statusText = 'On time';
+                let statusClass = 'status-ontime';
+
                 if (minsUntil <= 2) {
-                    timeDisplay = '<span class="time-mins">NOW</span>';
+                    statusText = 'NOW';
+                    statusClass = 'status-soon';
+                } else if (dep.delay > 0) {
+                    statusText = `+${dep.delay} min`;
+                    statusClass = 'status-delayed';
+                } else if (minsUntil <= 5) {
+                    statusText = `${minsUntil} min`;
+                    statusClass = 'status-soon';
                 } else {
-                    timeDisplay = `<span class="time-mins">${minsUntil} min</span>`;
+                    statusText = `${minsUntil} min`;
                 }
 
-                // Add delay in brackets with appropriate color
-                if (dep.delay > 0) {
-                    let delayClass = 'delay-minor';
-                    if (dep.delay >= 3) {
-                        delayClass = 'delay-major';
-                    }
-                    timeDisplay += ` <span class="time-delay ${delayClass}">[+${dep.delay}]</span>`;
-                } else if (minsUntil > 2) {
-                    timeDisplay += ` <span class="time-delay delay-ontime">[on time]</span>`;
-                }
-
-                // Get short line name
-                const shortLine = api.getShortLineName(dep.line);
+                const shortLine = this.getShortLineName(dep.line);
                 const lineColor = api.getLineColor(dep.line);
                 const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
 
-                // Get platform label with prefix
                 const platformLabel = this.getPlatformLabel(dep);
 
                 // Fleet type and stopping pattern info (italic, no bullet)
@@ -250,7 +248,7 @@ class DepartureBoard {
                 const stoppingInfo = dep.stoppingPattern ? ` ${dep.stoppingPattern}` : '';
 
                 row.innerHTML = `
-                    <div class="col-time">${timeDisplay}</div>
+                    <div class="col-time">${time}</div>
                     <div class="col-line" style="${lineStyle}">${this.escapeHtml(shortLine)}</div>
                     <div class="col-destination">
                         <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
@@ -267,6 +265,16 @@ class DepartureBoard {
         }
     }
 
+    // Helper methods copied from the original api.js (formatting)
+    formatTime(datetime) {
+        const date = new Date(datetime);
+        return date.toLocaleTimeString('en-AU', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    }
+
     getContrastedTextColor(hexColor) {
         // Convert hex to RGB
         const r = parseInt(hexColor.slice(1, 3), 16);
@@ -278,6 +286,58 @@ class DepartureBoard {
 
         // Return white or black based on luminance
         return luminance > 0.5 ? '#000000' : '#ffffff';
+    }
+
+    getMinutesUntil(datetime) {
+        const now = new Date();
+        const departure = new Date(datetime);
+        const diff = Math.round((departure - now) / 60000);
+        return diff;
+    }
+
+    getShortLineName(lineName) {
+        if (!lineName) return 'Unknown';
+
+        // remove spaces and convert to uppercase
+        let short = lineName.trim().toUpperCase();
+
+        // extract just the line identifier (T1, F2, L3, etc)
+        const match = short.match(/([TFL])(\d+|[A-Z]+)/);
+        if (match) {
+            return match[1] + match[2];
+        }
+
+        // try other patterns
+        if (short.includes('METRO')) return 'Metro';
+        if (short.includes('BUS')) return short.split(' ')[0];
+        if (short.includes('TRAIN')) return 'Train';
+
+        // Return first 4 characters if nothing else matches
+        return short.substring(0, 4);
+    }
+
+    getShortPlatform(platformString) {
+        if (!platformString) return '-';
+
+        const str = platformString.trim().toUpperCase();
+
+        // For bus stops like "Stop A", "Stop B"
+        const busMatch = str.match(/STOP\s*([A-Z])/);
+        if (busMatch) return busMatch[1];
+
+        // For platforms like "Platform 1", "Platform 2"
+        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
+        if (platformMatch) return platformMatch[1];
+
+        // For numbered formats
+        const numMatch = str.match(/\d+/);
+        if (numMatch) return numMatch[0];
+
+        // For letter formats
+        const letterMatch = str.match(/[A-Z]/);
+        if (letterMatch) return letterMatch[0];
+
+        return platformString;
     }
 
     showStatus(message, type) {

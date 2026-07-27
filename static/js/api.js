@@ -7,25 +7,23 @@ class TfNSWAPI {
         this.backendUrl = '/api';
     }
 
-    // Get departures from a stop
-    async getDepartures(stopId, options = {}) {
+    // Get raw departures data from the backend
+    async getDeparturesRaw(stopId) {
         try {
             const response = await fetch(`${this.backendUrl}/departures?stop_id=${stopId}`);
-
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status}`);
             }
-
             const data = await response.json();
-            return this.parseDepartureData(data);
+            return data; // raw TfNSW API response
         } catch (error) {
             console.error('Error fetching departures:', error);
             throw error;
         }
     }
 
-    // Parse the TfNSW departure response
-    parseDepartureData(data) {
+    // Parse raw TfNSW departure response into standardized format
+    parseDeparturesRaw(data) {
         const departures = [];
 
         if (!data.stopEvents) {
@@ -74,23 +72,6 @@ class TfNSWAPI {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         return `${hours}${minutes}`;
-    }
-
-    // Search for stops by name
-    async searchStops(query) {
-        try {
-            const response = await fetch(`${this.backendUrl}/stops?q=${encodeURIComponent(query)}`);
-
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.stops || [];
-        } catch (error) {
-            console.error('Error searching stops:', error);
-            throw error;
-        }
     }
 
     // Map line names to their colors from styles.css
@@ -152,71 +133,6 @@ class TfNSWAPI {
 
         // fallback to default orange
         return getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || '#a0a0a0';
-    }
-
-    // format time for display
-    formatTime(datetime) {
-        const date = new Date(datetime);
-        return date.toLocaleTimeString('en-AU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
-    }
-
-    // get minutes until departure
-    getMinutesUntil(datetime) {
-        const now = new Date();
-        const departure = new Date(datetime);
-        const diff = Math.round((departure - now) / 60000);
-        return diff;
-    }
-
-    // extract short line name (T4, F1, L2, etc)
-    getShortLineName(lineName) {
-        if (!lineName) return 'Unknown';
-
-        // remove spaces and convert to uppercase
-        let short = lineName.trim().toUpperCase();
-
-        // extract just the line identifier (T1, F2, L3, etc)
-        const match = short.match(/([TFL])(\d+|[A-Z]+)/);
-        if (match) {
-            return match[1] + match[2];
-        }
-
-        // try other patterns
-        if (short.includes('METRO')) return 'Metro';
-        if (short.includes('BUS')) return short.split(' ')[0];
-        if (short.includes('TRAIN')) return 'Train';
-
-        // Return first 4 characters if nothing else matches
-        return short.substring(0, 4);
-    }
-
-    // Extract short platform/stop identifier
-    getShortPlatform(platformString) {
-        if (!platformString) return '-';
-
-        const str = platformString.trim().toUpperCase();
-
-        // For bus stops like "Stop A", "Stop B"
-        const busMatch = str.match(/STOP\s*([A-Z])/);
-        if (busMatch) return busMatch[1];
-
-        // For platforms like "Platform 1", "Platform 2"
-        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
-        if (platformMatch) return platformMatch[1];
-
-        // For numbered formats
-        const numMatch = str.match(/\d+/);
-        if (numMatch) return numMatch[0];
-
-        // For letter formats
-        const letterMatch = str.match(/[A-Z]/);
-        if (letterMatch) return letterMatch[0];
-
-        return platformString;
     }
 }
 
