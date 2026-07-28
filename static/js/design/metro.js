@@ -22,6 +22,8 @@ class MetroDepartureBoard {
         this.stationNameEl = document.getElementById('stationName');
         this.stationIdEl = document.getElementById('stationId');
         this.headerTimeEl = document.getElementById('headerTime');
+        this.headerLeftEl = document.getElementById('headerLeft');
+        this.headerLeftEl.textContent = 'Next Departures';
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
@@ -54,7 +56,7 @@ class MetroDepartureBoard {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         if (this.headerTimeEl) {
-            this.headerTimeEl.textContent = `time: ${hours}:${minutes}`;
+            this.headerTimeEl.textContent = `Time: ${hours}:${minutes}`;
         }
     }
 
@@ -142,14 +144,32 @@ class MetroDepartureBoard {
             const departures = api.parseDeparturesRaw(rawData);
             this.allDepartures = departures;
 
-            if (departures.length === 0) {
-                this.departuresEl.innerHTML = '<p class="no-departures">No departures found. Check the stop id or selected date.</p>';
-                this.showStatus('No departures found', 'error');
+            // Filter metro services
+            const metroDepartures = departures.filter(dep =>
+                dep.line && dep.line.toLowerCase().includes('metro')
+            );
+
+            // Update header left text (always show "Next Departures")
+            if (this.headerLeftEl) {
+                this.headerLeftEl.textContent = 'Next Departures';
+            }
+
+            if (metroDepartures.length === 0) {
+                this.departuresEl.innerHTML = '';
                 this.displayStationInfo();
+                const now = new Date().toLocaleTimeString('en-AU', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                this.showStatus(`Last updated: ${now}`, '');
                 return;
             }
 
+            // Use only metro departures for rendering
+            this.allDepartures = metroDepartures;
             this.renderDepartures();
+
             this.displayStationInfo();
             const now = new Date().toLocaleTimeString('en-AU', {
                 hour: '2-digit',
@@ -192,40 +212,23 @@ class MetroDepartureBoard {
 
             const minsUntil = this.getMinutesUntil(dep.departureTime);
 
-            let timeDisplay = '';
-            if (minsUntil <= 2) {
-                timeDisplay = '<span class="time-mins">NOW</span>';
-            } else {
-                timeDisplay = `<span class="time-mins">${minsUntil} min</span>`;
-            }
+            let timeDisplay = minsUntil <= 2 ? 'NOW' : `${minsUntil} min`;
+            let blinkClass = timeDisplay === 'NOW' ? 'blink' : '';
 
+            let timeClass = 'ontime';
             if (dep.delay > 0) {
-                let delayClass = 'delay-minor';
-                if (dep.delay >= 3) {
-                    delayClass = 'delay-major';
-                }
-                timeDisplay += ` <span class="time-delay ${delayClass}">[+${dep.delay}]</span>`;
-            } else if (minsUntil > 2) {
-                timeDisplay += ` <span class="time-delay delay-ontime">[on time]</span>`;
+                timeClass = dep.delay >= 3 ? 'major' : 'minor';
             }
-
-            const shortLine = this.getShortLineName(dep.line);
-            const lineColor = api.getLineColor(dep.line, dep.mode);
-            const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
-
-            const shortPlatform = this.getShortPlatform(dep.platform);
-            const platformLabel = shortPlatform || '-';
-
-            const fleetInfo = dep.fleetType ? ` ${dep.fleetType}` : '';
-            const stoppingInfo = dep.stoppingPattern ? ` ${dep.stoppingPattern}` : '';
 
             row.innerHTML = `
-                <div class="col-time">${timeDisplay}</div>
-                <div class="col-line" style="${lineStyle}">${this.escapeHtml(shortLine)}</div>
-                <div class="col-destination">
+                <div class="dest">
                     <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
+                    ${dep.stoppingPattern ? `<div class="destination-via">${this.escapeHtml(dep.stoppingPattern)}</div>` : ''}
                 </div>
-                <div class="col-platform">${platformLabel}</div>
+                <div class="occupancy"></div>
+                <div class="time ${timeClass}">
+                    <div class="mins ${blinkClass}">${timeDisplay}</div>
+                </div>
             `;
 
             this.departuresEl.appendChild(row);

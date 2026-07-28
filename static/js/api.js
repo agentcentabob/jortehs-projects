@@ -67,7 +67,7 @@ class TfNSWAPI {
 
     // Calculate delay in minutes
     calculateDelay(planned, estimated) {
-        const plannedTime = new Date(plated);
+        const plannedTime = new Date(planned);
         const estimatedTime = new Date(estimated);
         return Math.round((estimatedTime - plannedTime) / 60000);
     }

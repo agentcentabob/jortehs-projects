@@ -23,7 +23,7 @@ reused and adopted for my design and technology student negotiated project with 
 - [x] add assessment information to home page
 - [ ] add site icons
 - [ ] complete alternative metro board design
-    - [ ] change colours
-    - [ ] change provided information
-    - [ ] make station search bar display all metro stations and platforms
-- [ ] simplify file layout following claude changes 
+    - [x] change colours
+    - [x] change provided information
+    - [ ] fix station functionality: showing and searching stop name, platform selectors
+- [x] simplify file layout following claude changes 
