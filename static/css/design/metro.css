@@ -1,10 +1,6 @@
 .container {
-    width: 1920px;
-    height: 1080px;
+    max-width: 1400px;
     margin: 0 auto;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
 }
 
 header {
@@ -136,15 +132,13 @@ button:active {
 }
 
 .board {
-    flex: 1 1 auto;
-    width: 100%;
     background: var(--white);
     border-radius: 10px;
     overflow: hidden;
+    margin: 10px;
 }
 
 .board-header {
-    flex: 0 0 auto;
     height: 60px;
     background: var(--metro);
     display: flex;
@@ -154,15 +148,26 @@ button:active {
     font-size: 1.2em;
     color: var(--white);
 }
+.header-left {
+    flex: 0 0 auto;
+}
+.header-busy {
+    flex: 1 1 auto;
+    text-align: center;
+    font-size: 1.2em;
+}
+.header-right {
+    flex: 0 0 auto;
+}
 
 .departures-list {
-    height: 100%;
+    max-height: 600px;
     overflow-y: auto;
 }
 
 .departure-row {
     display: grid;
-    grid-template-columns: 3fr 80px 1fr;
+    grid-template-columns: 50px 4fr 1fr 1fr;
     gap: 20px;
     padding: 15px 20px;
     background: var(--white);
@@ -172,18 +177,78 @@ button:active {
     margin-bottom: 0;
     animation: fadeIn 0.3s ease;
 }
-.departure-row:nth-child(even) {
-    background: #f9f9f9;
+
+/* Metro mode: hide platform and mode columns */
+.metro-mode .platform,
+.metro-mode .mode {
+    display: none;
 }
-.departure-row:hover {
-    background: #f5f5f5;
+
+/* All modes: show all columns */
+.all-modes .platform,
+.all-modes .mode {
+    display: block;
 }
-.departure-row .occupancy {
-    /* empty spacer */
+
+/* Platform column styling */
+.departure-row .platform {
+    width: 50px;
+    min-width: 50px;
+    text-align: center;
+    font-size: 0.9em;
+    color: #666;
 }
-.departure-row .dest {
-    font-size: 1.8em;
+
+/* Destination column styling */
+.dest {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Service name - make font size smaller as requested */
+.dest .service-name {
+    font-size: 1.6em; /* reduced from 1.8em */
     font-weight: normal;
+    margin-bottom: 4px;
+}
+
+/* Route number - shown only in all modes, with line color */
+.dest .route-number {
+    font-size: 0.9em;
+    font-weight: bold;
+    margin-top: 2px;
+}
+
+/* Mode text styling - smaller font */
+.dest .mode {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 4px;
+}
+
+/* Destination text - slightly larger for destination? Actually service name is the destination, we already set */
+.dest .destination-main {
+    /* This is now .service-name */
+}
+
+/* Stopping pattern - smaller */
+.dest .destination-via {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* Make 'next departures' and 'time' font slightly larger */
+.header-left,
+.header-right {
+    font-size: 1.4em !important;
+}
+
+/* Keep other fonts as before */
+.departure-row .occupancy {
+    text-align: center;
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #555;
 }
 .departure-row .time {
     text-align: right;
@@ -216,7 +281,7 @@ button:active {
     50%, 100% { opacity: 0; }
 }
 .blink {
-    animation: blink 1s steps(2, start) infinite;
+    animation: blink 2s steps(2, start) infinite;
 }
 
 .no-departures {
@@ -241,15 +306,8 @@ button:active {
     color: var(--major);
 }
 
-.header-left,
-.header-right {
-    font-weight: bold;
-    font-size: 1.4em;
-}
-
-header h1,
-.station-info,
-.controls,
-.back-link {
-    display: none;
+/* Ensure the existing destination-main class still works if referenced elsewhere */
+.dest .destination-main {
+    font-size: 1.8em;
+    font-weight: normal;
 }

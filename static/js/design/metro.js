@@ -7,6 +7,7 @@ class MetroDepartureBoard {
         this.refreshInterval = null;
         this.searchTimeout = null;
         this.allDepartures = [];
+        this.showOnlyMetro = true; // default to metro only
         this.init();
     }
 
@@ -14,6 +15,7 @@ class MetroDepartureBoard {
         this.stopInput = document.getElementById('stopInput');
         this.loadBtn = document.getElementById('loadBtn');
         this.refreshBtn = document.getElementById('refreshBtn');
+        this.modeToggle = document.getElementById('modeToggle');
         this.departuresEl = document.getElementById('departures');
         this.emptyStateEl = document.getElementById('emptyState');
         this.statusEl = document.getElementById('status');
@@ -23,10 +25,11 @@ class MetroDepartureBoard {
         this.stationIdEl = document.getElementById('stationId');
         this.headerTimeEl = document.getElementById('headerTime');
         this.headerLeftEl = document.getElementById('headerLeft');
-        this.headerLeftEl.textContent = 'Next Departures';
+        this.headerBusyEl = document.getElementById('headerBusy');
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
+        this.modeToggle.addEventListener('click', () => this.toggleMode());
 
         this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
         this.stopInput.addEventListener('keypress', (e) => {
@@ -49,15 +52,35 @@ class MetroDepartureBoard {
         // Start updating the header time
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
+
+        // Set initial mode class
+        this.updateModeClass();
+    }
+
+    updateModeClass() {
+        if (this.departuresEl) {
+            if (this.showOnlyMetro) {
+                this.departuresEl.classList.remove('all-modes');
+                this.departuresEl.classList.add('metro-mode');
+            } else {
+                this.departuresEl.classList.remove('metro-mode');
+                this.departuresEl.classList.add('all-modes');
+            }
+        }
     }
 
     updateHeaderTime() {
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
         if (this.headerTimeEl) {
-            this.headerTimeEl.textContent = `Time: ${hours}:${minutes}`;
+            this.headerTimeEl.textContent = `Time: ${hours}:${minutes}:${seconds}`;
         }
+    }
+
+    formatTime(date) {
+        return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
     }
 
     async handleSearch(e) {
@@ -142,42 +165,37 @@ class MetroDepartureBoard {
         try {
             const rawData = await api.getDeparturesRaw(this.stopId);
             const departures = api.parseDeparturesRaw(rawData);
-            this.allDepartures = departures;
 
-            // Filter metro services
-            const metroDepartures = departures.filter(dep =>
-                dep.line && dep.line.toLowerCase().includes('metro')
-            );
+            // Filter based on mode
+            let filtered = departures;
+            if (this.showOnlyMetro) {
+                filtered = departures.filter(dep =>
+                    dep.line && dep.line.toLowerCase().includes('metro')
+                );
+            }
 
-            // Update header left text (always show "Next Departures")
+            // Update header left
             if (this.headerLeftEl) {
                 this.headerLeftEl.textContent = 'Next Departures';
             }
 
-            if (metroDepartures.length === 0) {
+            if (filtered.length === 0) {
                 this.departuresEl.innerHTML = '';
                 this.displayStationInfo();
-                const now = new Date().toLocaleTimeString('en-AU', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-                this.showStatus(`Last updated: ${now}`, '');
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                this.showStatus(`Last updated: ${timeStr}`, '');
                 return;
             }
 
-            // Use only metro departures for rendering
-            this.allDepartures = metroDepartures;
+            // Use filtered list for rendering
+            this.allDepartures = filtered;
             this.renderDepartures();
 
             this.displayStationInfo();
-            const now = new Date().toLocaleTimeString('en-AU', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            this.showStatus(`Last updated: ${now}`, '');
-
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            this.showStatus(`Last updated: ${timeStr}`, '');
         } catch (error) {
             console.error('Error:', error);
             this.showStatus('Error loading departures. Check console for details.', 'error');
@@ -198,9 +216,10 @@ class MetroDepartureBoard {
         }
     }
 
-    renderDepartures(departuresToRender = this.allDepartures) {
+    renderDepartures() {
+        const departuresToRender = this.allDepartures;
         if (departuresToRender.length === 0) {
-            this.departuresEl.innerHTML = '<p class="no-departures">No departures found. Check the stop id or selected date.</p>';
+            this.departuresEl.innerHTML = '<p class="no-departures">No departures</p>';
             return;
         }
 
@@ -211,28 +230,47 @@ class MetroDepartureBoard {
             row.className = 'departure-row';
 
             const minsUntil = this.getMinutesUntil(dep.departureTime);
-
             let timeDisplay = minsUntil <= 2 ? 'NOW' : `${minsUntil} min`;
             let blinkClass = timeDisplay === 'NOW' ? 'blink' : '';
 
+            // Determine time colour based on delay
             let timeClass = 'ontime';
             if (dep.delay > 0) {
                 timeClass = dep.delay >= 3 ? 'major' : 'minor';
             }
 
-            row.innerHTML = `
+            // Build departure row HTML based on mode
+            let rowHtml = '';
+
+            // Always include platform column (will be hidden/shown via CSS)
+            rowHtml += `<div class="platform">${this.escapeHtml(dep.platform ?? '')}</div>`;
+
+            rowHtml += `
                 <div class="dest">
-                    <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
+                    <div class="service-name">${this.escapeHtml(dep.destination)}</div>
+                    ${!this.showOnlyMetro ? `<div class="route-number" style="color: ${api.getLineColor(dep.line, dep.mode)};">${this.escapeHtml(dep.line)}</div>` : ''}
                     ${dep.stoppingPattern ? `<div class="destination-via">${this.escapeHtml(dep.stoppingPattern)}</div>` : ''}
+                    ${!this.showOnlyMetro ? `<div class="mode">${this.escapeHtml(dep.mode)}</div>` : ''}
                 </div>
-                <div class="occupancy"></div>
+                <div class="occupancy">${dep.occupancy ?? ''}</div>
                 <div class="time ${timeClass}">
                     <div class="mins ${blinkClass}">${timeDisplay}</div>
                 </div>
             `;
 
+            row.innerHTML = rowHtml;
+
             this.departuresEl.appendChild(row);
         });
+    }
+
+    toggleMode() {
+        this.showOnlyMetro = !this.showOnlyMetro;
+        this.modeToggle.textContent = this.showOnlyMetro ? 'Show all modes' : 'Show metro only';
+        // Reload data with new filter
+        this.fetchAndDisplay();
+        // Update mode class for CSS
+        this.updateModeClass();
     }
 
     // Helper methods (copied from original api.js)

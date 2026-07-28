@@ -57,7 +57,8 @@ class TfNSWAPI {
                     : 0,
                 mode: event.transportation?.product?.class || 'Unknown',
                 fleetType: event.transportation?.product?.name || '',
-                stoppingPattern: event.stop?.properties?.stopType || ''
+                stoppingPattern: event.stop?.properties?.stopType || '',
+                occupancy: event.occupancy ?? null
             };
             departures.push(departure);
         });
