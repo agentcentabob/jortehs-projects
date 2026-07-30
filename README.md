@@ -26,4 +26,7 @@ reused and adopted for my design and technology student negotiated project with 
     - [x] change colours
     - [x] change provided information
     - [ ] fix station functionality: showing and searching stop name, platform selectors
+    - [ ] remove scroll bar
+    - [ ] add occupancy information
+    - [ ] fix departure time information
 - [x] simplify file layout following claude changes 
