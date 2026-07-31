@@ -217,7 +217,7 @@ class MetroDepartureBoard {
     }
 
     renderDepartures() {
-        const departuresToRender = this.allDepartures;
+        const departuresToRender = this.allDepartures.slice(0, 4); // Limit to 4 departures
         if (departuresToRender.length === 0) {
             this.departuresEl.innerHTML = '<p class="no-departures">No departures</p>';
             return;
@@ -226,12 +226,9 @@ class MetroDepartureBoard {
         this.departuresEl.innerHTML = '';
 
         departuresToRender.forEach(dep => {
-            const row = document.createElement('div');
-            row.className = 'departure-row';
-
-            const minsUntil = this.getMinutesUntil(dep.departureTime);
-            let timeDisplay = minsUntil <= 2 ? 'NOW' : `${minsUntil} min`;
-            let blinkClass = timeDisplay === 'NOW' ? 'blink' : '';
+            const minsUntil = this.getMinutesUntil(dep.expected_departure_time || dep.departure_time);
+            let timeDisplay = minsUntil <= 0 ? 'Due' : `${minsUntil}m`;
+            let blinkClass = timeDisplay === 'Due' ? 'blink' : '';
 
             // Determine time colour based on delay
             let timeClass = 'ontime';
@@ -239,26 +236,69 @@ class MetroDepartureBoard {
                 timeClass = dep.delay >= 3 ? 'major' : 'minor';
             }
 
-            // Build departure row HTML based on mode
-            let rowHtml = '';
+            const row = document.createElement('div');
+            row.className = 'departure-row';
 
-            // Always include platform column (will be hidden/shown via CSS)
-            rowHtml += `<div class="platform">${this.escapeHtml(dep.platform ?? '')}</div>`;
+            // Platform column
+            const platformEl = document.createElement('div');
+            platformEl.className = 'platform';
+            platformEl.textContent = this.getShortPlatform(dep.platform) || '-';
+            row.appendChild(platformEl);
 
-            rowHtml += `
-                <div class="dest">
-                    <div class="service-name">${this.escapeHtml(dep.destination)}</div>
-                    ${!this.showOnlyMetro ? `<div class="route-number" style="color: ${api.getLineColor(dep.line, dep.mode)};">${this.escapeHtml(dep.line)}</div>` : ''}
-                    ${dep.stoppingPattern ? `<div class="destination-via">${this.escapeHtml(dep.stoppingPattern)}</div>` : ''}
-                    ${!this.showOnlyMetro ? `<div class="mode">${this.escapeHtml(dep.mode)}</div>` : ''}
-                </div>
-                <div class="occupancy">${dep.occupancy ?? ''}</div>
-                <div class="time ${timeClass}">
-                    <div class="mins ${blinkClass}">${timeDisplay}</div>
-                </div>
-            `;
+            // Destination column
+            const destEl = document.createElement('div');
+            destEl.className = 'dest';
 
-            row.innerHTML = rowHtml;
+            // Service name (destination)
+            const serviceNameEl = document.createElement('div');
+            serviceNameEl.className = 'service-name';
+            serviceNameEl.textContent = this.escapeHtml(dep.destination) || this.escapeHtml(dep.service_name) || 'Unknown';
+            destEl.appendChild(serviceNameEl);
+
+            // Route number (only in all-modes view)
+            if (!this.showOnlyMetro && dep.line) {
+                const routeNumberEl = document.createElement('div');
+                routeNumberEl.className = 'route-number';
+                routeNumberEl.textContent = this.getShortLineName(dep.line);
+                routeNumberEl.style.color = api.getLineColor(dep.line, dep.mode);
+                destEl.appendChild(routeNumberEl);
+            }
+
+            // Stopping pattern
+            if (dep.stopping_pattern) {
+                const stoppingPatternEl = document.createElement('div');
+                stoppingPatternEl.className = 'destination-via';
+                stoppingPatternEl.textContent = this.escapeHtml(dep.stopping_pattern);
+                destEl.appendChild(stoppingPatternEl);
+            }
+
+            // Mode (only in all-modes view)
+            if (!this.showOnlyMetro && dep.mode) {
+                const modeEl = document.createElement('div');
+                modeEl.className = 'mode';
+                modeEl.textContent = this.escapeHtml(dep.mode);
+                destEl.appendChild(modeEl);
+            }
+
+            // Towards text placeholder (for future implementation)
+            const towardsEl = document.createElement('div');
+            towardsEl.className = 'towards';
+            towardsEl.textContent = '(towards)'; // Placeholder - to be implemented with direction data
+            destEl.appendChild(towardsEl);
+
+            row.appendChild(destEl);
+
+            // Occupancy column
+            const occupancyEl = document.createElement('div');
+            occupancyEl.className = 'occupancy';
+            occupancyEl.textContent = dep.occupancy || '-';
+            row.appendChild(occupancyEl);
+
+            // Time column
+            const timeEl = document.createElement('div');
+            timeEl.className = `time ${timeClass}`;
+            timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
+            row.appendChild(timeEl);
 
             this.departuresEl.appendChild(row);
         });

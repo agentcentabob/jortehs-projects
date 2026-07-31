@@ -141,13 +141,13 @@ button:active {
 }
 
 .board-header {
-    height: 60px;
+    height: 70px;
     background: var(--metro);
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0 20px;
-    font-size: 1.2em;
+    font-size: 1.6em;
     color: var(--white);
 }
 .header-left {
@@ -169,13 +169,13 @@ button:active {
 
 .departure-row {
     display: grid;
-    grid-template-columns: 50px 4fr 1fr 1fr;
-    gap: 20px;
-    padding: 15px 20px;
+    grid-template-columns: 60px 4fr 1fr 1fr;
+    gap: 25px;
+    padding: 20px 25px;
     background: var(--white);
     color: #000;
     border: 1px solid #ddd;
-    border-radius: 8px;
+    border-radius: 10px;
     margin-bottom: 0;
     animation: fadeIn 0.3s ease;
 }
@@ -194,10 +194,10 @@ button:active {
 
 /* Platform column styling */
 .departure-row .platform {
-    width: 50px;
-    min-width: 50px;
+    width: 60px;
+    min-width: 60px;
     text-align: center;
-    font-size: 0.9em;
+    font-size: 1.1em;
     color: #666;
 }
 
@@ -207,55 +207,58 @@ button:active {
     flex-direction: column;
 }
 
-/* Service name - make font size smaller as requested */
+/* Service name - make font size larger for better readability */
 .dest .service-name {
-    font-size: 1.6em; /* reduced from 1.8em */
-    font-weight: normal;
-    margin-bottom: 4px;
+    font-size: 1.9em; /* increased from 1.6em for better readability */
+    font-weight: 600;
+    margin-bottom: 6px;
 }
 
 /* Route number - shown only in all modes, with line color */
 .dest .route-number {
-    font-size: 0.9em;
+    font-size: 1.1em;
     font-weight: bold;
-    margin-top: 2px;
+    margin-top: 3px;
 }
 
-/* Mode text styling - smaller font */
+/* Mode text styling - slightly larger font */
 .dest .mode {
-    font-size: 0.8em;
-    color: #999;
-    margin-top: 4px;
-}
-
-/* Destination text - slightly larger for destination? Actually service name is the destination, we already set */
-.dest .destination-main {
-    /* This is now .service-name */
-}
-
-/* Stopping pattern - smaller */
-.dest .destination-via {
     font-size: 0.9em;
+    color: #999;
+    margin-top: 5px;
+}
+
+/* Stopping pattern - slightly larger */
+.dest .destination-via {
+    font-size: 1.1em;
     color: #666;
 }
 
-/* Make 'next departures' and 'time' font slightly larger */
-.header-left,
-.header-right {
-    font-size: 1.4em !important;
+/* Towards text styling */
+.dest .towards {
+    font-size: 0.85em;
+    color: #bbb;
+    font-style: italic;
+    margin-top: 3px;
 }
 
-/* Keep other fonts as before */
+/* Make 'next departures' and 'time' font larger */
+.header-left,
+.header-right {
+    font-size: 1.8em !important;
+}
+
+/* Keep other fonts as before but increase sizes */
 .departure-row .occupancy {
     text-align: center;
-    font-size: 1.4em;
+    font-size: 1.6em;
     font-weight: bold;
     color: #555;
 }
 .departure-row .time {
     text-align: right;
-    font-size: 1.8em;
-    font-weight: normal;
+    font-size: 2.2em;
+    font-weight: 500;
 }
 .departure-row .time .mins {
     display: block;
