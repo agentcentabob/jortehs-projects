@@ -8,6 +8,7 @@ class MetroDepartureBoard {
         this.searchTimeout = null;
         this.allDepartures = [];
         this.showOnlyMetro = true; // default to metro only
+        this.justSelectedFromSuggestion = false; // Track if we just selected from suggestions
         this.init();
     }
 
@@ -86,7 +87,8 @@ class MetroDepartureBoard {
     async handleSearch(e) {
         const query = e.target.value.trim();
 
-        if (query.length < 2) {
+        // Only search when at least 4 characters are entered
+        if (query.length < 4) {
             this.suggestionsEl.style.display = 'none';
             return;
         }
@@ -95,7 +97,9 @@ class MetroDepartureBoard {
         this.searchTimeout = setTimeout(async () => {
             try {
                 const stops = await api.searchStops(query);
-                this.displaySuggestions(stops);
+                // Limit to first 6 matches
+                const limitedStops = stops.slice(0, 6);
+                this.displaySuggestions(limitedStops);
             } catch (error) {
                 console.error('Search error:', error);
             }
@@ -118,6 +122,7 @@ class MetroDepartureBoard {
                 this.stopInput.value = stop.name;
                 this.stopId = stop.id;
                 this.stopName = stop.name;
+                this.justSelectedFromSuggestion = true; // Set flag when selecting from suggestions
                 this.suggestionsEl.style.display = 'none';
                 this.loadDepartures();
             });
@@ -135,9 +140,11 @@ class MetroDepartureBoard {
             return;
         }
 
+        // Clear previous stop data
         this.stopId = null;
         this.stopName = null;
 
+        // if stopId is not already set from search, use the input value
         if (!this.stopId) {
             this.stopId = inputValue;
             this.stopName = inputValue;
@@ -226,9 +233,17 @@ class MetroDepartureBoard {
         this.departuresEl.innerHTML = '';
 
         departuresToRender.forEach(dep => {
-            const minsUntil = this.getMinutesUntil(dep.expected_departure_time || dep.departure_time);
-            let timeDisplay = minsUntil <= 0 ? 'Due' : `${minsUntil}m`;
-            let blinkClass = timeDisplay === 'Due' ? 'blink' : '';
+            const minsUntil = this.getMinutesUntil(dep.departureTime);
+            let timeDisplay;
+            let blinkClass = '';
+            if (minsUntil === null) {
+                timeDisplay = '-';
+            } else {
+                timeDisplay = minsUntil <= 0 ? 'NOW' : `${minsUntil} min`;
+                if (timeDisplay === 'NOW') {
+                    blinkClass = 'blink';
+                }
+            }
 
             // Determine time colour based on delay
             let timeClass = 'ontime';
@@ -249,11 +264,19 @@ class MetroDepartureBoard {
             const destEl = document.createElement('div');
             destEl.className = 'dest';
 
-            // Service name (destination)
+            // Service name (destination) - display as-is from API like in second.js
             const serviceNameEl = document.createElement('div');
             serviceNameEl.className = 'service-name';
-            serviceNameEl.textContent = this.escapeHtml(dep.destination) || this.escapeHtml(dep.service_name) || 'Unknown';
+            serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
             destEl.appendChild(serviceNameEl);
+
+            // Towards text (placed to the right of destination)
+            const towardsEl = document.createElement('div');
+            towardsEl.className = 'towards';
+            towardsEl.textContent = '(towards)'; // Placeholder - to be implemented with direction data
+            towardsEl.style.fontSize = '1.2em'; // Larger font size as requested
+            towardsEl.style.marginLeft = '8px'; // Space between destination and towards
+            destEl.appendChild(towardsEl);
 
             // Route number (only in all-modes view)
             if (!this.showOnlyMetro && dep.line) {
@@ -280,18 +303,13 @@ class MetroDepartureBoard {
                 destEl.appendChild(modeEl);
             }
 
-            // Towards text placeholder (for future implementation)
-            const towardsEl = document.createElement('div');
-            towardsEl.className = 'towards';
-            towardsEl.textContent = '(towards)'; // Placeholder - to be implemented with direction data
-            destEl.appendChild(towardsEl);
-
             row.appendChild(destEl);
 
             // Occupancy column
             const occupancyEl = document.createElement('div');
             occupancyEl.className = 'occupancy';
-            occupancyEl.textContent = dep.occupancy || '-';
+            // Show occupancy value or '-' if null/undefined
+            occupancyEl.textContent = dep.occupancy !== null && dep.occupancy !== undefined ? dep.occupancy : '-';
             row.appendChild(occupancyEl);
 
             // Time column
@@ -315,10 +333,20 @@ class MetroDepartureBoard {
 
     // Helper methods (copied from original api.js)
     getMinutesUntil(datetime) {
+        // Handle null, undefined, or empty string
+        if (!datetime) {
+            return null;
+        }
+
         const now = new Date();
         const departure = new Date(datetime);
-        const diff = Math.round((departure - now) / 60000);
-        return diff;
+
+        // Check if the date is valid
+        if (isNaN(departure.getTime())) {
+            return null;
+        }
+
+        return Math.round((departure - now) / 60000);
     }
 
     getShortLineName(lineName) {
