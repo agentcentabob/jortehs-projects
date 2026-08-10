@@ -8,6 +8,7 @@ class MetroDepartureBoard {
         this.searchTimeout = null;
         this.allDepartures = [];
         this.showOnlyMetro = true; // default to metro only
+        this.showVerticalBoard = false; // flag to toggle between standard and vertical board
         this.justSelectedFromSuggestion = false; // Track if we just selected from suggestions
         this.init();
     }
@@ -27,10 +28,17 @@ class MetroDepartureBoard {
         this.headerTimeEl = document.getElementById('headerTime');
         this.headerLeftEl = document.getElementById('headerLeft');
         this.headerBusyEl = document.getElementById('headerBusy');
+        // Vertical board elements
+        this.verticalBoardContainer = document.getElementById('verticalBoardContainer');
+        this.standardBoardContainer = document.getElementById('standardBoardContainer');
+        this.direction1Header = document.getElementById('direction1Header');
+        this.direction2Header = document.getElementById('direction2Header');
+        this.direction1List = document.getElementById('direction1List');
+        this.direction2List = document.getElementById('direction2List');
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
-        this.modeToggle.addEventListener('click', () => this.toggleMode());
+        this.modeToggle.addEventListener('click', () => this.toggleBoard());
 
         this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
         this.stopInput.addEventListener('keypress', (e) => {
@@ -54,8 +62,8 @@ class MetroDepartureBoard {
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
 
-        // Set initial mode class
-        this.updateModeClass();
+        // Initially show standard board
+        this.showStandardBoard();
     }
 
     updateModeClass() {
@@ -187,7 +195,10 @@ class MetroDepartureBoard {
             }
 
             if (filtered.length === 0) {
+                // Clear both boards
                 this.departuresEl.innerHTML = '';
+                this.direction1List.innerHTML = '';
+                this.direction2List.innerHTML = '';
                 this.displayStationInfo();
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -197,7 +208,12 @@ class MetroDepartureBoard {
 
             // Use filtered list for rendering
             this.allDepartures = filtered;
-            this.renderDepartures();
+
+            if (this.showVerticalBoard) {
+                this.renderVerticalBoard();
+            } else {
+                this.renderDepartures();
+            }
 
             this.displayStationInfo();
             const now = new Date();
@@ -322,13 +338,164 @@ class MetroDepartureBoard {
         });
     }
 
-    toggleMode() {
-        this.showOnlyMetro = !this.showOnlyMetro;
-        this.modeToggle.textContent = this.showOnlyMetro ? 'Show all modes' : 'Show metro only';
-        // Reload data with new filter
+    renderVerticalBoard() {
+        // Group departures by platform
+        const platformGroups = {};
+        this.allDepartures.forEach(dep => {
+            const platform = this.getShortPlatform(dep.platform) || 'Unknown';
+            if (!platformGroups[platform]) {
+                platformGroups[platform] = [];
+            }
+            platformGroups[platform].push(dep);
+        });
+
+        // Get platforms sorted by count (descending)
+        const sortedPlatforms = Object.keys(platformGroups).sort((a, b) => {
+            return platformGroups[b].length - platformGroups[a].length;
+        });
+
+        // Take top two platforms (or use the same if only one)
+        let platform1 = sortedPlatforms[0] || 'Unknown';
+        let platform2 = sortedPlatforms[1] || platform1; // if only one, duplicate
+
+        // Update headers
+        if (this.direction1Header) {
+            this.direction1Header.textContent = `Platform ${platform1}`;
+        }
+        if (this.direction2Header) {
+            this.direction2Header.textContent = `Platform ${platform2}`;
+        }
+
+        // Get up to 3 departures for each platform
+        const direction1Departs = platformGroups[platform1] ? platformGroups[platform1].slice(0, 3) : [];
+        const direction2Departs = platformGroups[platform2] ? platformGroups[platform2].slice(0, 3) : [];
+
+        // Clear lists
+        this.direction1List.innerHTML = '';
+        this.direction2List.innerHTML = [];
+
+        // Render direction 1
+        direction1Departs.forEach(dep => {
+            const minsUntil = this.getMinutesUntil(dep.departureTime);
+            let timeDisplay;
+            let blinkClass = '';
+            if (minsUntil === null) {
+                timeDisplay = '-';
+            } else {
+                timeDisplay = minsUntil <= 0 ? 'NOW' : `${minsUntil} min`;
+                if (timeDisplay === 'NOW') {
+                    blinkClass = 'blink';
+                }
+            }
+
+            // Determine time colour based on delay
+            let timeClass = 'ontime';
+            if (dep.delay > 0) {
+                timeClass = dep.delay >= 3 ? 'major' : 'minor';
+            }
+
+            const row = document.createElement('div');
+            row.className = 'vertical-departure-row';
+
+            // Destination
+            const destEl = document.createElement('div');
+            destEl.className = 'vertical-dest';
+            destEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
+            row.appendChild(destEl);
+
+            // Towards text
+            const towardsEl = document.createElement('div');
+            towardsEl.className = 'vertical-towards';
+            towardsEl.textContent = '(towards)';
+            towardsEl.style.fontSize = '1.2em';
+            towardsEl.style.marginLeft = '8px';
+            destEl.appendChild(towardsEl);
+
+            // Time
+            const timeEl = document.createElement('div');
+            timeEl.className = `vertical-time ${timeClass}`;
+            timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
+            row.appendChild(timeEl);
+
+            this.direction1List.appendChild(row);
+        });
+
+        // Render direction 2
+        direction2Departs.forEach(dep => {
+            const minsUntil = this.getMinutesUntil(dep.departureTime);
+            let timeDisplay;
+            let blinkClass = '';
+            if (minsUntil === null) {
+                timeDisplay = '-';
+            } else {
+                timeDisplay = minsUntil <= 0 ? 'NOW' : `${minsUntil} min`;
+                if (timeDisplay === 'NOW') {
+                    blinkClass = 'blink';
+                }
+            }
+
+            // Determine time colour based on delay
+            let timeClass = 'ontime';
+            if (dep.delay > 0) {
+                timeClass = dep.delay >= 3 ? 'major' : 'minor';
+            }
+
+            const row = document.createElement('div');
+            row.className = 'vertical-departure-row';
+
+            // Destination
+            const destEl = document.createElement('div');
+            destEl.className = 'vertical-dest';
+            destEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
+            row.appendChild(destEl);
+
+            // Towards text
+            const towardsEl = document.createElement('div');
+            towardsEl.className = 'vertical-towards';
+            towardsEl.textContent = '(towards)';
+            towardsEl.style.fontSize = '1.2em';
+            towardsEl.style.marginLeft = '8px';
+            destEl.appendChild(towardsEl);
+
+            // Time
+            const timeEl = document.createElement('div');
+            timeEl.className = `vertical-time ${timeClass}`;
+            timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
+            row.appendChild(timeEl);
+
+            this.direction2List.appendChild(row);
+        });
+
+        // If no departures for a direction, show a message
+        if (direction1Departs.length === 0) {
+            this.direction1List.innerHTML = '<p class="no-departures">No departures</p>';
+        }
+        if (direction2Departs.length === 0) {
+            this.direction2List.innerHTML = '<p class="no-departures">No departures</p>';
+        }
+    }
+
+    toggleBoard() {
+        this.showVerticalBoard = !this.showVerticalBoard;
+        if (this.showVerticalBoard) {
+            this.showVerticalBoardView();
+        } else {
+            this.showStandardBoardView();
+        }
+        // Reload data with current filter
         this.fetchAndDisplay();
-        // Update mode class for CSS
-        this.updateModeClass();
+    }
+
+    showStandardBoardView() {
+        this.standardBoardContainer.style.display = 'block';
+        this.verticalBoardContainer.style.display = 'none';
+        this.modeToggle.textContent = 'Show Vertical Board';
+    }
+
+    showVerticalBoardView() {
+        this.standardBoardContainer.style.display = 'none';
+        this.verticalBoardContainer.style.display = 'block';
+        this.modeToggle.textContent = 'Show Standard Board';
     }
 
     // Helper methods (copied from original api.js)

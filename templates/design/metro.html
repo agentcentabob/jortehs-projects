@@ -22,19 +22,34 @@
                     <div id="suggestions" class="suggestions-dropdown"></div>
                 </div>
                 <button id="loadBtn">Load Departures</button>
-                <button id="modeToggle">Show All</button>
-                <button id="refreshBtn">⟳</button>
+                <button id="modeToggle">Show Vertical Board</button>
+                <button id="refreshBtn">��⟳</button>
             </div>
             <div class="status" id="status"></div>
         </header>
 
-        <div class="board">
-            <div class="board-header">
-                <span class="header-left" id="headerLeft"></span>
-                <span class="header-right" id="headerTime"></span>
+        <div id="standardBoardContainer">
+            <div class="board">
+                <div class="board-header">
+                    <span class="header-left" id="headerLeft"></span>
+                    <span class="header-right" id="headerTime"></span>
+                </div>
+                <div id="departures" class="departures-list">
+                    <!-- departures will be inserted here -->
+                </div>
             </div>
-            <div id="departures" class="departures-list">
-                <!-- departures will be inserted here -->
+        </div>
+
+        <div id="verticalBoardContainer" style="display: none;">
+            <div class="vertical-board">
+                <div class="direction-column" id="direction1">
+                    <div class="direction-header" id="direction1Header">Platform 1</div>
+                    <div class="departures-list" id="direction1List"></div>
+                </div>
+                <div class="direction-column" id="direction2">
+                    <div class="direction-header" id="direction2Header">Platform 2</div>
+                    <div class="departures-list" id="direction2List"></div>
+                </div>
             </div>
         </div>
 
