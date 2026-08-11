@@ -23,7 +23,7 @@
                 </div>
                 <button id="loadBtn">Load Departures</button>
                 <button id="modeToggle">Show Vertical Board</button>
-                <button id="refreshBtn">��⟳</button>
+                <button id="refreshBtn">������⟳</button>
             </div>
             <div class="status" id="status"></div>
         </header>
@@ -42,13 +42,21 @@
 
         <div id="verticalBoardContainer" style="display: none;">
             <div class="vertical-board">
-                <div class="direction-column" id="direction1">
-                    <div class="direction-header" id="direction1Header">Platform 1</div>
-                    <div class="departures-list" id="direction1List"></div>
+                <div class="platform-section" id="platform1Section">
+                    <div class="platform-header" id="platform1Header">
+                        <span class="header-time" id="platform1HeaderTime"></span>
+                        <span class="header-title" id="platform1HeaderTitle">Platform 1</span>
+                        <span class="header-arrow" id="platform1HeaderArrow">→</span>
+                    </div>
+                    <div class="departures-list" id="platform1List"></div>
                 </div>
-                <div class="direction-column" id="direction2">
-                    <div class="direction-header" id="direction2Header">Platform 2</div>
-                    <div class="departures-list" id="direction2List"></div>
+                <div class="platform-section" id="platform2Section">
+                    <div class="platform-header" id="platform2Header">
+                        <span class="header-arrow" id="platform2HeaderArrow">←</span>
+                        <span class="header-title" id="platform2HeaderTitle">Platform 2</span>
+                        <span class="header-time" id="platform2HeaderTime"></span>
+                    </div>
+                    <div class="departures-list" id="platform2List"></div>
                 </div>
             </div>
         </div>
