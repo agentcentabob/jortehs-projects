@@ -58,7 +58,7 @@ class TfNSWAPI {
                 mode: event.transportation?.product?.class || 'Unknown',
                 fleetType: event.transportation?.product?.name || '',
                 stoppingPattern: event.stop?.properties?.stopType || '',
-                occupancy: event.occupancy ?? null
+                occupancy: event.location?.properties?.occupancy ?? null
             };
             departures.push(departure);
         });
@@ -88,6 +88,17 @@ class TfNSWAPI {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         return `${hours}${minutes}`;
+    }
+
+    // Map TfNSW's occupancy string (e.g. "MANY_SEATS", "FEW_SEATS") to a 1-3 crowding level.
+    // Returns 0 when there's no occupancy data for this service.
+    getOccupancyLevel(occupancy) {
+        if (!occupancy) return 0;
+        const key = String(occupancy).toUpperCase();
+        if (key.includes('FULL') || key.includes('CRUSH') || key.includes('NOT_ACCEPTING') || key.includes('NOT_BOARDABLE')) return 3;
+        if (key.includes('FEW') || key.includes('STANDING')) return 2;
+        if (key.includes('MANY') || key.includes('EMPTY')) return 1;
+        return 0;
     }
 
     // Map line names to their colors from styles.css

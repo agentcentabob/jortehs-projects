@@ -8,8 +8,6 @@ class MetroDepartureBoard {
         this.searchTimeout = null;
         this.allDepartures = [];
         this.showOnlyMetro = true; // default to metro only
-        this.showVerticalBoard = false; // flag to toggle between standard and vertical board
-        this.justSelectedFromSuggestion = false; // Track if we just selected from suggestions
         this.init();
     }
 
@@ -17,7 +15,6 @@ class MetroDepartureBoard {
         this.stopInput = document.getElementById('stopInput');
         this.loadBtn = document.getElementById('loadBtn');
         this.refreshBtn = document.getElementById('refreshBtn');
-        this.modeToggle = document.getElementById('modeToggle');
         this.departuresEl = document.getElementById('departures');
         this.emptyStateEl = document.getElementById('emptyState');
         this.statusEl = document.getElementById('status');
@@ -27,26 +24,9 @@ class MetroDepartureBoard {
         this.stationIdEl = document.getElementById('stationId');
         this.headerTimeEl = document.getElementById('headerTime');
         this.headerLeftEl = document.getElementById('headerLeft');
-        // headerBusyEl removed as it's no longer in the HTML
-        // Vertical board elements - new structure
-        this.verticalBoardContainer = document.getElementById('verticalBoardContainer');
-        this.standardBoardContainer = document.getElementById('standardBoardContainer');
-        this.platform1Section = document.getElementById('platform1Section');
-        this.platform1Header = document.getElementById('platform1Header');
-        this.platform1HeaderTime = document.getElementById('platform1HeaderTime');
-        this.platform1HeaderTitle = document.getElementById('platform1HeaderTitle');
-        this.platform1HeaderArrow = document.getElementById('platform1HeaderArrow');
-        this.platform1List = document.getElementById('platform1List');
-        this.platform2Section = document.getElementById('platform2Section');
-        this.platform2Header = document.getElementById('platform2Header');
-        this.platform2HeaderTime = document.getElementById('platform2HeaderTime');
-        this.platform2HeaderTitle = document.getElementById('platform2HeaderTitle');
-        this.platform2HeaderArrow = document.getElementById('platform2HeaderArrow');
-        this.platform2List = document.getElementById('platform2List');
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
-        this.modeToggle.addEventListener('click', () => this.toggleBoard());
 
         this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
         this.stopInput.addEventListener('keypress', (e) => {
@@ -69,9 +49,6 @@ class MetroDepartureBoard {
         // Start updating the header time
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
-
-        // Initially show standard board
-        this.showStandardBoard();
     }
 
     updateModeClass() {
@@ -93,17 +70,8 @@ class MetroDepartureBoard {
         const seconds = String(now.getSeconds()).padStart(2, '0');
         const timeString = `${hours}:${minutes}`;
 
-        // Update standard board header time
         if (this.headerTimeEl) {
             this.headerTimeEl.textContent = `Time now: ${timeString}`;
-        }
-
-        // Update vertical board header times if they exist
-        if (this.platform1HeaderTime) {
-            this.platform1HeaderTime.textContent = `Time now: ${timeString}`;
-        }
-        if (this.platform2HeaderTime) {
-            this.platform2HeaderTime.textContent = `Time now: ${timeString}`;
         }
     }
 
@@ -149,7 +117,6 @@ class MetroDepartureBoard {
                 this.stopInput.value = stop.name;
                 this.stopId = stop.id;
                 this.stopName = stop.name;
-                this.justSelectedFromSuggestion = true; // Set flag when selecting from suggestions
                 this.suggestionsEl.style.display = 'none';
                 this.loadDepartures();
             });
@@ -167,14 +134,25 @@ class MetroDepartureBoard {
             return;
         }
 
-        // Clear previous stop data
-        this.stopId = null;
-        this.stopName = null;
-
-        // if stopId is not already set from search, use the input value
-        if (!this.stopId) {
-            this.stopId = inputValue;
-            this.stopName = inputValue;
+        // If the box still shows exactly what a suggestion click set, keep that
+        // resolved id/name. Otherwise resolve whatever was typed - name or stop ID -
+        // to a real stop via search, so either kind of input ends up with a real id.
+        if (!(this.stopId && this.stopName === inputValue)) {
+            this.showStatus('Looking up station...', 'loading');
+            try {
+                const stops = await api.searchStops(inputValue);
+                if (stops.length > 0) {
+                    this.stopId = stops[0].id;
+                    this.stopName = stops[0].name;
+                } else {
+                    this.stopId = inputValue;
+                    this.stopName = inputValue;
+                }
+            } catch (error) {
+                console.error('Stop lookup error:', error);
+                this.stopId = inputValue;
+                this.stopName = inputValue;
+            }
         }
 
         localStorage.setItem('lastStopId', this.stopId);
@@ -214,10 +192,7 @@ class MetroDepartureBoard {
             }
 
             if (filtered.length === 0) {
-                // Clear both boards
                 this.departuresEl.innerHTML = '';
-                this.direction1List.innerHTML = '';
-                this.direction2List.innerHTML = '';
                 this.displayStationInfo();
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -227,12 +202,7 @@ class MetroDepartureBoard {
 
             // Use filtered list for rendering
             this.allDepartures = filtered;
-
-            if (this.showVerticalBoard) {
-                this.renderVerticalBoard();
-            } else {
-                this.renderDepartures();
-            }
+            this.renderDepartures();
 
             this.displayStationInfo();
             const now = new Date();
@@ -299,13 +269,13 @@ class MetroDepartureBoard {
             serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
             destEl.appendChild(serviceNameEl);
 
-            // Towards text (placed to the right of destination)
-            const towardsEl = document.createElement('div');
-            towardsEl.className = 'towards';
-            towardsEl.textContent = '(towards)'; // Placeholder - to be implemented with direction data
-            towardsEl.style.fontSize = '1.2em'; // Larger font size as requested
-            towardsEl.style.marginLeft = '8px'; // Space between destination and towards
-            destEl.appendChild(towardsEl);
+            // Service status line - no live disruption feed wired up yet, so this is
+            // a placeholder for now (real stopping-pattern/status data isn't present
+            // in the TfNSW response for metro services)
+            const statusEl = document.createElement('div');
+            statusEl.className = 'service-status';
+            this.setScrollingText(statusEl, 'Good service');
+            destEl.appendChild(statusEl);
 
             // Route number (only in all-modes view)
             if (!this.showOnlyMetro && dep.line) {
@@ -337,8 +307,7 @@ class MetroDepartureBoard {
             // Occupancy column
             const occupancyEl = document.createElement('div');
             occupancyEl.className = 'occupancy';
-            // Show occupancy value or '-' if null/undefined
-            occupancyEl.textContent = dep.occupancy !== null && dep.occupancy !== undefined ? dep.occupancy : '-';
+            occupancyEl.innerHTML = this.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
             row.appendChild(occupancyEl);
 
             // Time column
@@ -351,219 +320,29 @@ class MetroDepartureBoard {
         });
     }
 
-    renderVerticalBoard() {
-        // Group departures by platform
-        const platformGroups = {};
-        this.allDepartures.forEach(dep => {
-            const platform = this.getShortPlatform(dep.platform) || 'Unknown';
-            if (!platformGroups[platform]) {
-                platformGroups[platform] = [];
-            }
-            platformGroups[platform].push(dep);
-        });
-
-        // Get platforms sorted by count (descending)
-        const sortedPlatforms = Object.keys(platformGroups).sort((a, b) => {
-            return platformGroups[b].length - platformGroups[a].length;
-        });
-
-        // Take top two platforms (or use the same if only one)
-        let platform1 = sortedPlatforms[0] || 'Unknown';
-        let platform2 = sortedPlatforms[1] || platform1; // if only one, duplicate
-
-        // Update headers with time and arrows
-        if (this.platform1HeaderTime) {
-            this.platform1HeaderTime.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
-        }
-        if (this.platform1HeaderTitle) {
-            this.platform1HeaderTitle.textContent = `Platform ${platform1}`;
-        }
-        if (this.platform1HeaderArrow) {
-            this.platform1HeaderArrow.textContent = '→';
-        }
-
-        if (this.platform2HeaderTime) {
-            this.platform2HeaderTime.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
-        }
-        if (this.platform2HeaderTitle) {
-            this.platform2HeaderTitle.textContent = `Platform ${platform2}`;
-        }
-        if (this.platform2HeaderArrow) {
-            this.platform2HeaderArrow.textContent = '←';
-        }
-
-        // Get ONLY 3 departures for each platform (as requested)
-        const direction1Departs = platformGroups[platform1] ? platformGroups[platform1].slice(0, 3) : [];
-        const direction2Departs = platformGroups[platform2] ? platformGroups[platform2].slice(0, 3) : [];
-
-        // Clear lists
-        this.platform1List.innerHTML = '';
-        this.platform2List.innerHTML = '';
-
-        // Render direction 1 (top board)
-        direction1Departs.forEach(dep => {
-            const minsUntil = this.getMinutesUntil(dep.departureTime);
-            let timeDisplay;
-            let blinkClass = '';
-            if (minsUntil === null) {
-                timeDisplay = '-';
-            } else {
-                timeDisplay = minsUntil <= 0 ? 'NOW' : `${minsUntil} min`;
-                if (timeDisplay === 'NOW') {
-                    blinkClass = 'blink';
-                }
-            }
-
-            // Determine time colour based on delay
-            let timeClass = 'ontime';
-            if (dep.delay > 0) {
-                timeClass = dep.delay >= 3 ? 'major' : 'minor';
-            }
-
-            // Determine occupancy class based on delay (same as time)
-            let occupancyClass = 'ontime';
-            if (dep.delay > 0) {
-                occupancyClass = dep.delay >= 3 ? 'major' : 'minor';
-            }
-
-            const row = document.createElement('div');
-            row.className = 'vertical-departure-row';
-
-            // Occupancy column (left of time)
-            const occupancyEl = document.createElement('div');
-            occupancyEl.className = `vertical-occupancy ${occupancyClass}`;
-            // Show occupancy value or '-' if null/undefined
-            occupancyEl.textContent = dep.occupancy !== null && dep.occupancy !== undefined ? dep.occupancy : '-';
-            row.appendChild(occupancyEl);
-
-            // Destination column
-            const destEl = document.createElement('div');
-            destEl.className = 'vertical-dest';
-
-            // Service name (destination)
-            const serviceNameEl = document.createElement('div');
-            serviceNameEl.className = 'service-name';
-            serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
-            destEl.appendChild(serviceNameEl);
-
-            // Via STATUS text (placeholder - small italic, to the right)
-            const viaStatusEl = document.createElement('div');
-            viaStatusEl.className = 'vertical-via-status';
-            viaStatusEl.textContent = '(via)'; // Placeholder for via station
-            viaStatusEl.style.fontSize = '0.9em';
-            viaStatusEl.style.fontStyle = 'italic';
-            viaStatusEl.style.color = '#666';
-            viaStatusEl.style.marginLeft = '8px';
-            destEl.appendChild(viaStatusEl);
-
-            row.appendChild(destEl);
-
-            // Time column WITHOUT "time now:" prefix (it goes in header)
-            const timeEl = document.createElement('div');
-            timeEl.className = `vertical-time ${timeClass}`;
-            timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
-            row.appendChild(timeEl);
-
-            this.platform1List.appendChild(row);
-        });
-
-        // Render direction 2 (bottom board)
-        direction2Departs.forEach(dep => {
-            const minsUntil = this.getMinutesUntil(dep.departureTime);
-            let timeDisplay;
-            let blinkClass = '';
-            if (minsUntil === null) {
-                timeDisplay = '-';
-            } else {
-                timeDisplay = minsUntil <= 0 ? 'NOW' : `${minsUntil} min`;
-                if (timeDisplay === 'NOW') {
-                    blinkClass = 'blink';
-                }
-            }
-
-            // Determine time colour based on delay
-            let timeClass = 'ontime';
-            if (dep.delay > 0) {
-                timeClass = dep.delay >= 3 ? 'major' : 'minor';
-            }
-
-            // Determine occupancy class based on delay (same as time)
-            let occupancyClass = 'ontime';
-            if (dep.delay > 0) {
-                occupancyClass = dep.delay >= 3 ? 'major' : 'minor';
-            }
-
-            const row = document.createElement('div');
-            row.className = 'vertical-departure-row';
-
-            // Occupancy column (left of time)
-            const occupancyEl = document.createElement('div');
-            occupancyEl.className = `vertical-occupancy ${occupancyClass}`;
-            // Show occupancy value or '-' if null/undefined
-            occupancyEl.textContent = dep.occupancy !== null && dep.occupancy !== undefined ? dep.occupancy : '-';
-            row.appendChild(occupancyEl);
-
-            // Destination column
-            const destEl = document.createElement('div');
-            destEl.className = 'vertical-dest';
-
-            // Service name (destination)
-            const serviceNameEl = document.createElement('div');
-            serviceNameEl.className = 'service-name';
-            serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
-            destEl.appendChild(serviceNameEl);
-
-            // Via STATUS text (placeholder - small italic, to the right)
-            const viaStatusEl = document.createElement('div');
-            viaStatusEl.className = 'vertical-via-status';
-            viaStatusEl.textContent = '(via)'; // Placeholder for via station
-            viaStatusEl.style.fontSize = '0.9em';
-            viaStatusEl.style.fontStyle = 'italic';
-            viaStatusEl.style.color = '#666';
-            viaStatusEl.style.marginLeft = '8px';
-            destEl.appendChild(viaStatusEl);
-
-            row.appendChild(destEl);
-
-            // Time column WITHOUT "time now:" prefix (it goes in header)
-            const timeEl = document.createElement('div');
-            timeEl.className = `vertical-time ${timeClass}`;
-            timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
-            row.appendChild(timeEl);
-
-            this.platform2List.appendChild(row);
-        });
-
-        // If no departures for a direction, show a message
-        if (direction1Departs.length === 0) {
-            this.platform1List.innerHTML = '<p class="no-departures">No departures</p>';
-        }
-        if (direction2Departs.length === 0) {
-            this.platform2List.innerHTML = '<p class="no-departures">No departures</p>';
+    // Sets text normally, or wraps it for a scrolling marquee once it's long
+    // enough that it wouldn't fit (currently unused by the "Good service"
+    // placeholder, but ready for real longer status messages later)
+    setScrollingText(container, text) {
+        container.textContent = '';
+        container.classList.remove('scrolling');
+        const span = document.createElement('span');
+        span.className = 'status-text';
+        span.textContent = text;
+        container.appendChild(span);
+        if (text.length > 40) {
+            container.classList.add('scrolling');
         }
     }
 
-    toggleBoard() {
-        this.showVerticalBoard = !this.showVerticalBoard;
-        if (this.showVerticalBoard) {
-            this.showVerticalBoardView();
-        } else {
-            this.showStandardBoardView();
+    renderOccupancyIcons(level) {
+        let html = '<div class="occupancy-icons" aria-label="crowding level">';
+        for (let i = 1; i <= 3; i++) {
+            const filled = level >= i;
+            html += `<svg viewBox="0 0 24 32" class="${filled ? 'occ-fill' : 'occ-empty'}"><circle cx="12" cy="7" r="6"/><path d="M2 30 C2 18 6 14 12 14 C18 14 22 18 22 30 Z"/></svg>`;
         }
-        // Reload data with current filter
-        this.fetchAndDisplay();
-    }
-
-    showStandardBoardView() {
-        this.standardBoardContainer.style.display = 'block';
-        this.verticalBoardContainer.style.display = 'none';
-        this.modeToggle.textContent = 'Show Vertical Board';
-    }
-
-    showVerticalBoardView() {
-        this.standardBoardContainer.style.display = 'none';
-        this.verticalBoardContainer.style.display = 'block';
-        this.modeToggle.textContent = 'Show Standard Board';
+        html += '</div>';
+        return html;
     }
 
     // Helper methods (copied from original api.js)
@@ -603,30 +382,6 @@ class MetroDepartureBoard {
 
         // Return first 4 characters if nothing else matches
         return short.substring(0, 4);
-    }
-
-    getShortPlatform(platformString) {
-        if (!platformString) return '-';
-
-        const str = platformString.trim().toUpperCase();
-
-        // For bus stops like "Stop A", "Stop B"
-        const busMatch = str.match(/STOP\s*([A-Z])/);
-        if (busMatch) return busMatch[1];
-
-        // For platforms like "Platform 1", "Platform 2"
-        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
-        if (platformMatch) return platformMatch[1];
-
-        // For numbered formats
-        const numMatch = str.match(/\d+/);
-        if (numMatch) return numMatch[0];
-
-        // For letter formats
-        const letterMatch = str.match(/[A-Z]/);
-        if (letterMatch) return letterMatch[0];
-
-        return platformString;
     }
 
     getContrastedTextColor(hexColor) {

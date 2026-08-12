@@ -68,25 +68,17 @@ def get_departures():
 
 @app.route('/api/stops', methods=['GET'])
 def get_stops():
-    """Get all available stops for searching"""
+    """Search for stops by name or stop ID"""
     search_query = request.args.get('q', '').strip()
-
-    sydney_tz = pytz.timezone('Australia/Sydney')
-    now = datetime.now(sydney_tz)
-    itd_date = now.strftime('%Y%m%d')
-    itd_time = now.strftime('%H%M')
+    if not search_query:
+        return jsonify({'stops': []})
 
     params = {
         'outputFormat': 'rapidJSON',
         'coordOutputFormat': 'EPSG:4326',
-        'mode': 'direct',
-        'type_dm': 'stop',
-        'name_dm': search_query if search_query else '%',
-        'depArrMacro': 'dep',
-        'itdDate': itd_date,
-        'itdTime': itd_time,
-        'TfNSWTR': 'true',
-        'maxItems': 50
+        'type_sf': 'any',
+        'name_sf': search_query,
+        'TfNSWSF': 'true'
     }
 
     headers = {
@@ -95,32 +87,30 @@ def get_stops():
 
     try:
         response = requests.get(
-            f'{API_BASE_URL}/departure_mon',
+            f'{API_BASE_URL}/stop_finder',
             params=params,
             headers=headers
         )
         response.raise_for_status()
         data = response.json()
 
-        stops = []
+        # stop_finder matches streets/POIs/suburbs too - keep actual stops only,
+        # ranked by TfNSW's own match confidence
+        stops = [
+            {'id': loc.get('id'), 'name': loc.get('name'), 'matchQuality': loc.get('matchQuality', 0)}
+            for loc in data.get('locations', [])
+            if loc.get('type') == 'stop' and loc.get('id') and loc.get('name')
+        ]
+        stops.sort(key=lambda s: s['matchQuality'], reverse=True)
+
         seen = set()
+        deduped = []
+        for stop in stops:
+            if stop['id'] not in seen:
+                seen.add(stop['id'])
+                deduped.append({'id': stop['id'], 'name': stop['name']})
 
-        # Extract stops from stopEvents
-        if data.get('stopEvents'):
-            for event in data['stopEvents']:
-                # Get stop info from location
-                stop_location = event.get('location', {})
-                stop_id = stop_location.get('id')
-                stop_name = stop_location.get('name', '')
-
-                if stop_id and stop_name and stop_id not in seen:
-                    seen.add(stop_id)
-                    stops.append({
-                        'id': stop_id,
-                        'name': stop_name
-                    })
-
-        return jsonify({'stops': stops})
+        return jsonify({'stops': deduped[:15]})
 
     except requests.exceptions.RequestException as e:
         return jsonify({'error': str(e)}), 500

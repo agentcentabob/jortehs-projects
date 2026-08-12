@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escalator Departure Board</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/design/escalator.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="back-link">← Back</a>
+            <h1 id="h1">Escalator Departure Board</h1>
+            <div class="station-info" id="stationInfo" style="display: none;">
+                <span id="stationName"></span>
+                <span id="stationId"></span>
+            </div>
+            <div class="controls">
+                <div class="search-container">
+                    <input type="text" id="stopInput" placeholder="Search station by name or enter Stop ID" />
+                    <div id="suggestions" class="suggestions-dropdown"></div>
+                </div>
+                <button id="loadBtn">Load Departures</button>
+                <button id="refreshBtn">⟳</button>
+            </div>
+            <div class="status" id="status"></div>
+        </header>
+
+        <div class="escalator-board" id="escalatorBoard">
+            <div class="platform-section" id="platform1Section">
+                <div class="platform-header platform-header--top">
+                    <span class="header-time">
+                        <span class="time-label">Time Now</span>
+                        <span class="time-value" id="platform1HeaderTime"></span>
+                    </span>
+                    <span class="header-title" id="platform1HeaderTitle">Platform –</span>
+                    <span class="header-arrow">→</span>
+                </div>
+                <div class="departures-list" id="platform1List"></div>
+            </div>
+
+            <div class="platform-section" id="platform2Section">
+                <div class="platform-header platform-header--bottom">
+                    <span class="header-arrow">←</span>
+                    <span class="header-title" id="platform2HeaderTitle">Platform –</span>
+                    <span class="header-time">
+                        <span class="time-label">Time Now</span>
+                        <span class="time-value" id="platform2HeaderTime"></span>
+                    </span>
+                </div>
+                <div class="departures-list" id="platform2List"></div>
+            </div>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <p>Enter a stop ID or search for a station to load departures</p>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/design/escalator.js"></script>
+</body>
+</html>
