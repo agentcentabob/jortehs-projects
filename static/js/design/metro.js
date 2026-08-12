@@ -91,8 +91,19 @@ class MetroDepartureBoard {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
+        const timeString = `${hours}:${minutes}`;
+
+        // Update standard board header time
         if (this.headerTimeEl) {
-            this.headerTimeEl.textContent = `Time: ${hours}:${minutes}:${seconds}`;
+            this.headerTimeEl.textContent = `Time now: ${timeString}`;
+        }
+
+        // Update vertical board header times if they exist
+        if (this.platform1HeaderTime) {
+            this.platform1HeaderTime.textContent = `Time now: ${timeString}`;
+        }
+        if (this.platform2HeaderTime) {
+            this.platform2HeaderTime.textContent = `Time now: ${timeString}`;
         }
     }
 
@@ -278,12 +289,6 @@ class MetroDepartureBoard {
             const row = document.createElement('div');
             row.className = 'departure-row';
 
-            // Platform column
-            const platformEl = document.createElement('div');
-            platformEl.className = 'platform';
-            platformEl.textContent = this.getShortPlatform(dep.platform) || '-';
-            row.appendChild(platformEl);
-
             // Destination column
             const destEl = document.createElement('div');
             destEl.className = 'dest';
@@ -387,9 +392,9 @@ class MetroDepartureBoard {
             this.platform2HeaderArrow.textContent = '←';
         }
 
-        // Get up to 3 departures for each platform (enough to fill vertical space)
-        const direction1Departs = platformGroups[platform1] ? platformGroups[platform1].slice(0, 6) : []; // Increased for vertical layout
-        const direction2Departs = platformGroups[platform2] ? platformGroups[platform2].slice(0, 6) : []; // Increased for vertical layout
+        // Get ONLY 3 departures for each platform (as requested)
+        const direction1Departs = platformGroups[platform1] ? platformGroups[platform1].slice(0, 3) : [];
+        const direction2Departs = platformGroups[platform2] ? platformGroups[platform2].slice(0, 3) : [];
 
         // Clear lists
         this.platform1List.innerHTML = '';
@@ -441,16 +446,19 @@ class MetroDepartureBoard {
             serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
             destEl.appendChild(serviceNameEl);
 
-            // Via status text (smaller, italics, scrolling bar)
+            // Via STATUS text (placeholder - small italic, to the right)
             const viaStatusEl = document.createElement('div');
             viaStatusEl.className = 'vertical-via-status';
-            // Placeholder for via station - to be implemented later
-            viaStatusEl.textContent = 'via (Central)'; // Example - will be implemented semi-manually later
+            viaStatusEl.textContent = '(via)'; // Placeholder for via station
+            viaStatusEl.style.fontSize = '0.9em';
+            viaStatusEl.style.fontStyle = 'italic';
+            viaStatusEl.style.color = '#666';
+            viaStatusEl.style.marginLeft = '8px';
             destEl.appendChild(viaStatusEl);
 
             row.appendChild(destEl);
 
-            // Time column
+            // Time column WITHOUT "time now:" prefix (it goes in header)
             const timeEl = document.createElement('div');
             timeEl.className = `vertical-time ${timeClass}`;
             timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
@@ -505,16 +513,19 @@ class MetroDepartureBoard {
             serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
             destEl.appendChild(serviceNameEl);
 
-            // Via status text (smaller, italics, scrolling bar)
+            // Via STATUS text (placeholder - small italic, to the right)
             const viaStatusEl = document.createElement('div');
             viaStatusEl.className = 'vertical-via-status';
-            // Placeholder for via station - to be implemented later
-            viaStatusEl.textContent = 'via (Strathfield)'; // Example - will be implemented semi-manually later
+            viaStatusEl.textContent = '(via)'; // Placeholder for via station
+            viaStatusEl.style.fontSize = '0.9em';
+            viaStatusEl.style.fontStyle = 'italic';
+            viaStatusEl.style.color = '#666';
+            viaStatusEl.style.marginLeft = '8px';
             destEl.appendChild(viaStatusEl);
 
             row.appendChild(destEl);
 
-            // Time column
+            // Time column WITHOUT "time now:" prefix (it goes in header)
             const timeEl = document.createElement('div');
             timeEl.className = `vertical-time ${timeClass}`;
             timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;

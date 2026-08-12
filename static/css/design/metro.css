@@ -3,23 +3,145 @@
     margin: 0 auto;
 }
 
-/* For vertical board layout - stack boards on top of each other */
+/* Vertical board container - phone screen shaped */
 .vertical-board {
-    display: block !important;
-    width: 100% !important;
-    max-width: 1400px !important;
-    margin: 0 auto !important;
+    width: 360px;
+    height: 450px;
+    margin: 10px auto;
+    overflow: hidden;
+    background: var(--white);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-/* Stack platform sections vertically */
+/* Platform sections - each takes half the vertical space */
 .platform-section {
-    display: block;
-    width: 100%;
-    margin-bottom: 20px;
+    height: 50%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 3px;
+    box-sizing: border-box;
 }
 
-.platform-section:last-child {
-    margin-bottom: 0;
+.platform-section:first-child {
+    border-bottom: 1px solid #eee;
+}
+
+/* Platform header styling to match horizontal board header */
+.platform-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 30px;
+    background: var(--metro);
+    color: var(--white);
+    padding: 0 5px;
+    font-size: 0.9em !important;
+    margin-bottom: 5px;
+    border-bottom: none !important;
+}
+
+.header-time {
+    flex: 0 0 auto;
+    font-size: 0.8em;
+}
+
+.header-title {
+    flex: 1 1 auto;
+    text-align: center;
+    font-weight: bold;
+}
+
+.header-arrow {
+    flex: 0 0 auto;
+    font-size: 0.9em;
+}
+
+/* Vertical departure row styling */
+.vertical-departure-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--white);
+    border-radius: 6px;
+    border: 1px solid #eee;
+    animation: fadeIn 0.3s ease;
+    flex-shrink: 0;
+    margin-bottom: 5px;
+}
+
+/* Add alternating background for contrast, first departure always white */
+.vertical-departure-row:nth-child(even) {
+    background: #f8f9fa;
+}
+
+/* Destination text styling */
+.vertical-dest {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Service name (destination) */
+.service-name {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+    margin-right: 8px;
+}
+
+/* Via status text (normal font weight, to the right of departure) */
+.vertical-via-status {
+    font-size: 0.9em;
+    font-style: normal;
+    color: #666;
+    margin-left: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+/* Time column styling */
+.vertical-time {
+    text-align: right;
+    font-size: 1.6em;
+    font-weight: 500;
+    min-width: 100px;
+}
+
+.vertical-time .mins {
+    display: block;
+}
+
+/* Apply same delay colors to vertical board */
+.vertical-time.ontime { color: var(--ontime); }
+.vertical-time.minor { color: var(--minor); }
+.vertical-time.major { color: var(--major); }
+
+/* Blinking effect for NOW in vertical board */
+.vertical-time .blink {
+    animation: blink 2s steps(2, start) infinite;
+}
+
+/* Occupancy column styling - numerical value with delay coloring */
+.vertical-occupancy {
+    text-align: center;
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #555;
+    min-width: 40px;
+}
+
+/* No departures message */
+.no-departures {
+    text-align: center;
+    color: var(--dark-gray);
+    font-style: italic;
+    padding: 20px;
+    margin: 0;
 }
 
 /* Platform header styling to match horizontal board header */
@@ -38,7 +160,7 @@
 
 .header-time {
     flex: 0 0 auto;
-    font-size: 0.9em;
+    font-size: 0.8em;
 }
 
 .header-title {
@@ -311,7 +433,7 @@ button:active {
 
 .departure-row {
     display: grid;
-    grid-template-columns: 60px 4fr 1fr 1fr;
+    grid-template-columns: 4fr 1fr 1fr;
     gap: 25px;
     padding: 20px 25px;
     background: var(--white);
@@ -474,7 +596,7 @@ button:active {
     flex: 1;
     background: #f8f9fa;
     border-radius: 8px;
-    padding: 15px;
+    padding: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
