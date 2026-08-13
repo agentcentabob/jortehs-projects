@@ -23,13 +23,16 @@ class EscalatorBoard {
         this.stationInfoEl = document.getElementById('stationInfo');
         this.stationNameEl = document.getElementById('stationName');
         this.stationIdEl = document.getElementById('stationId');
+        this.boardTicker = document.getElementById('boardTicker');
 
         this.platform1HeaderTime = document.getElementById('platform1HeaderTime');
         this.platform1HeaderTitle = document.getElementById('platform1HeaderTitle');
+        this.platform1NextStop = document.getElementById('platform1NextStop');
         this.platform1List = document.getElementById('platform1List');
 
         this.platform2HeaderTime = document.getElementById('platform2HeaderTime');
         this.platform2HeaderTitle = document.getElementById('platform2HeaderTitle');
+        this.platform2NextStop = document.getElementById('platform2NextStop');
         this.platform2List = document.getElementById('platform2List');
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
@@ -143,6 +146,17 @@ class EscalatorBoard {
             }
         }
 
+        // This board only shows Metro (M1) departures - reject anything else here.
+        // A broader "is this any real TfNSW stop ID" check is a planned site-wide
+        // feature, not implemented yet.
+        if (!api.isM1Station(this.stopName)) {
+            this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
+            this.stopId = null;
+            this.stopName = null;
+            this.resetToEmptyState();
+            return;
+        }
+
         localStorage.setItem('lastStopId', this.stopId);
 
         await this.fetchAndDisplay();
@@ -196,6 +210,19 @@ class EscalatorBoard {
         }
     }
 
+    // Reverts the board to its initial "nothing loaded" state - used when a
+    // station turns out not to be a valid Metro station
+    resetToEmptyState() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        this.escalatorBoardEl.style.display = 'none';
+        this.stationInfoEl.style.display = 'none';
+        this.emptyStateEl.style.display = 'block';
+        this.emptyStateEl.innerHTML = '<p>Enter a stop ID or search for a station to load departures</p>';
+    }
+
     renderBoard() {
         // Group departures by platform, show the two busiest
         const platformGroups = {};
@@ -215,8 +242,40 @@ class EscalatorBoard {
         this.platform1HeaderTitle.textContent = `Platform ${platform1}`;
         this.platform2HeaderTitle.textContent = `Platform ${platform2}`;
 
+        this.updateNextStop(this.platform1NextStop, platformGroups[platform1]);
+        this.updateNextStop(this.platform2NextStop, platformGroups[platform2]);
+
         this.renderPlatformRows(this.platform1List, platformGroups[platform1] || []);
         this.renderPlatformRows(this.platform2List, platformGroups[platform2] || []);
+
+        this.updateTicker();
+    }
+
+    // "Next stop" for a platform - derived from its first departure's direction,
+    // since a platform's queued departures all run the same way. Temporary/testing
+    // feature: not sourced from the API (see m1Line.js).
+    updateNextStop(el, departures) {
+        if (!el) return;
+        const dest = departures && departures[0] ? departures[0].destination : null;
+        const nextStop = dest ? api.getNextStop(this.stopName, dest) : null;
+        el.textContent = nextStop ? `Next stop ${nextStop}` : '';
+    }
+
+    // Welcome ticker - temporary/testing feature above the top platform display
+    updateTicker() {
+        if (!this.boardTicker) return;
+
+        // Station name only, no suburb (e.g. "Central Station, Sydney" -> "Central Station")
+        const shortStationName = (this.stopName || '').split(',')[0].trim();
+
+        // Line names come from the live departures - no hardcoded fallback, so
+        // this naturally stays correct as TfNSW extends/renames the line
+        const lines = [...new Set(this.allDepartures.map(dep => dep.line).filter(Boolean))];
+        const message = lines.length > 0
+            ? `Welcome to ${shortStationName}. Good service on ${lines.join(', ')}.`
+            : `Welcome to ${shortStationName}.`;
+
+        this.setScrollingText(this.boardTicker, message);
     }
 
     // Always renders exactly ROWS_PER_PLATFORM rows, padding with blank
@@ -257,22 +316,14 @@ class EscalatorBoard {
         destEl.textContent = dep.destination || 'Unknown';
         destLine.appendChild(destEl);
 
-        if (dep.stoppingPattern) {
-            const badgeEl = document.createElement('span');
-            badgeEl.className = 'row-badge';
-            badgeEl.textContent = dep.stoppingPattern;
-            destLine.appendChild(badgeEl);
-        }
-
         main.appendChild(destLine);
 
-        // Service status line - no live disruption feed wired up yet, so this is
-        // a placeholder for now (real stopping-pattern/status data isn't present
-        // in the TfNSW response for metro services)
-        const statusEl = document.createElement('div');
-        statusEl.className = 'row-status';
-        this.setScrollingText(statusEl, 'Good service');
-        main.appendChild(statusEl);
+        // Stopping pattern - hardcoded "All stops[ via City]" default since TfNSW
+        // doesn't provide real stopping-pattern data for metro (see m1Line.js)
+        const badgeEl = document.createElement('div');
+        badgeEl.className = 'row-badge';
+        badgeEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);
+        main.appendChild(badgeEl);
 
         row.appendChild(main);
 
@@ -303,9 +354,10 @@ class EscalatorBoard {
         destEl.textContent = '—';
         destLine.appendChild(destEl);
         main.appendChild(destLine);
-        const statusEl = document.createElement('div');
-        statusEl.className = 'row-status';
-        main.appendChild(statusEl);
+        const badgeEl = document.createElement('div');
+        badgeEl.className = 'row-badge placeholder';
+        badgeEl.textContent = '—';
+        main.appendChild(badgeEl);
         row.appendChild(main);
 
         const occupancyEl = document.createElement('div');
@@ -320,9 +372,8 @@ class EscalatorBoard {
         return row;
     }
 
-    // Sets text normally, or wraps it for a scrolling marquee once it's long
-    // enough that it wouldn't fit (currently unused by the "Good service"
-    // placeholder, but ready for real longer status messages later)
+    // Sets text normally, or wraps it for a scrolling marquee once it's too
+    // long to fit (used by the welcome ticker)
     setScrollingText(container, text) {
         container.textContent = '';
         container.classList.remove('scrolling');

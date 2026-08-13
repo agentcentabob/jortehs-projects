@@ -7,7 +7,6 @@ class MetroDepartureBoard {
         this.refreshInterval = null;
         this.searchTimeout = null;
         this.allDepartures = [];
-        this.showOnlyMetro = true; // default to metro only
         this.init();
     }
 
@@ -51,32 +50,15 @@ class MetroDepartureBoard {
         setInterval(() => this.updateHeaderTime(), 1000);
     }
 
-    updateModeClass() {
-        if (this.departuresEl) {
-            if (this.showOnlyMetro) {
-                this.departuresEl.classList.remove('all-modes');
-                this.departuresEl.classList.add('metro-mode');
-            } else {
-                this.departuresEl.classList.remove('metro-mode');
-                this.departuresEl.classList.add('all-modes');
-            }
-        }
-    }
-
     updateHeaderTime() {
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
         const timeString = `${hours}:${minutes}`;
 
         if (this.headerTimeEl) {
             this.headerTimeEl.textContent = `Time now: ${timeString}`;
         }
-    }
-
-    formatTime(date) {
-        return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
     }
 
     async handleSearch(e) {
@@ -155,6 +137,17 @@ class MetroDepartureBoard {
             }
         }
 
+        // This board only shows Metro (M1) departures - reject anything else here.
+        // A broader "is this any real TfNSW stop ID" check is a planned site-wide
+        // feature, not implemented yet.
+        if (!api.isM1Station(this.stopName)) {
+            this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
+            this.stopId = null;
+            this.stopName = null;
+            this.resetToEmptyState();
+            return;
+        }
+
         localStorage.setItem('lastStopId', this.stopId);
 
         await this.fetchAndDisplay();
@@ -178,15 +171,11 @@ class MetroDepartureBoard {
             const rawData = await api.getDeparturesRaw(this.stopId);
             const departures = api.parseDeparturesRaw(rawData);
 
-            // Filter based on mode
-            let filtered = departures;
-            if (this.showOnlyMetro) {
-                filtered = departures.filter(dep =>
-                    dep.line && dep.line.toLowerCase().includes('metro')
-                );
-            }
+            // This board only ever shows Metro departures
+            const filtered = departures.filter(dep =>
+                dep.line && dep.line.toLowerCase().includes('metro')
+            );
 
-            // Update header left
             if (this.headerLeftEl) {
                 this.headerLeftEl.textContent = 'Next Departures';
             }
@@ -200,7 +189,6 @@ class MetroDepartureBoard {
                 return;
             }
 
-            // Use filtered list for rendering
             this.allDepartures = filtered;
             this.renderDepartures();
 
@@ -226,6 +214,19 @@ class MetroDepartureBoard {
             this.stationIdEl.textContent = '';
             this.stationInfoEl.style.display = 'block';
         }
+    }
+
+    // Reverts the board to its initial "nothing loaded" state - used when a
+    // station turns out not to be a valid Metro station
+    resetToEmptyState() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        this.departuresEl.innerHTML = '';
+        this.stationInfoEl.style.display = 'none';
+        this.emptyStateEl.style.display = 'block';
+        this.emptyStateEl.innerHTML = '<p>Enter a stop ID or search for a station and click "Load Departures" to begin</p>';
     }
 
     renderDepartures() {
@@ -263,45 +264,23 @@ class MetroDepartureBoard {
             const destEl = document.createElement('div');
             destEl.className = 'dest';
 
-            // Service name (destination) - display as-is from API like in second.js
+            // Destination name and stopping pattern share a line
+            const nameLineEl = document.createElement('div');
+            nameLineEl.className = 'name-line';
+
             const serviceNameEl = document.createElement('div');
             serviceNameEl.className = 'service-name';
             serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
-            destEl.appendChild(serviceNameEl);
+            nameLineEl.appendChild(serviceNameEl);
 
-            // Service status line - no live disruption feed wired up yet, so this is
-            // a placeholder for now (real stopping-pattern/status data isn't present
-            // in the TfNSW response for metro services)
-            const statusEl = document.createElement('div');
-            statusEl.className = 'service-status';
-            this.setScrollingText(statusEl, 'Good service');
-            destEl.appendChild(statusEl);
+            // Stopping pattern - hardcoded "All stops[ via City]" default since TfNSW
+            // doesn't provide real stopping-pattern data for metro (see m1Line.js)
+            const stoppingPatternEl = document.createElement('div');
+            stoppingPatternEl.className = 'destination-via';
+            stoppingPatternEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);
+            nameLineEl.appendChild(stoppingPatternEl);
 
-            // Route number (only in all-modes view)
-            if (!this.showOnlyMetro && dep.line) {
-                const routeNumberEl = document.createElement('div');
-                routeNumberEl.className = 'route-number';
-                routeNumberEl.textContent = this.getShortLineName(dep.line);
-                routeNumberEl.style.color = api.getLineColor(dep.line, dep.mode);
-                destEl.appendChild(routeNumberEl);
-            }
-
-            // Stopping pattern
-            if (dep.stopping_pattern) {
-                const stoppingPatternEl = document.createElement('div');
-                stoppingPatternEl.className = 'destination-via';
-                stoppingPatternEl.textContent = this.escapeHtml(dep.stopping_pattern);
-                destEl.appendChild(stoppingPatternEl);
-            }
-
-            // Mode (only in all-modes view)
-            if (!this.showOnlyMetro && dep.mode) {
-                const modeEl = document.createElement('div');
-                modeEl.className = 'mode';
-                modeEl.textContent = this.escapeHtml(dep.mode);
-                destEl.appendChild(modeEl);
-            }
-
+            destEl.appendChild(nameLineEl);
             row.appendChild(destEl);
 
             // Occupancy column
@@ -320,21 +299,6 @@ class MetroDepartureBoard {
         });
     }
 
-    // Sets text normally, or wraps it for a scrolling marquee once it's long
-    // enough that it wouldn't fit (currently unused by the "Good service"
-    // placeholder, but ready for real longer status messages later)
-    setScrollingText(container, text) {
-        container.textContent = '';
-        container.classList.remove('scrolling');
-        const span = document.createElement('span');
-        span.className = 'status-text';
-        span.textContent = text;
-        container.appendChild(span);
-        if (text.length > 40) {
-            container.classList.add('scrolling');
-        }
-    }
-
     renderOccupancyIcons(level) {
         let html = '<div class="occupancy-icons" aria-label="crowding level">';
         for (let i = 1; i <= 3; i++) {
@@ -345,7 +309,6 @@ class MetroDepartureBoard {
         return html;
     }
 
-    // Helper methods (copied from original api.js)
     getMinutesUntil(datetime) {
         // Handle null, undefined, or empty string
         if (!datetime) {
@@ -361,35 +324,6 @@ class MetroDepartureBoard {
         }
 
         return Math.round((departure - now) / 60000);
-    }
-
-    getShortLineName(lineName) {
-        if (!lineName) return 'Unknown';
-
-        // remove spaces and convert to uppercase
-        let short = lineName.trim().toUpperCase();
-
-        // extract just the line identifier (T1, F2, L3, etc)
-        const match = short.match(/([TFL])(\d+|[A-Z]+)/);
-        if (match) {
-            return match[1] + match[2];
-        }
-
-        // try other patterns
-        if (short.includes('METRO')) return 'Metro';
-        if (short.includes('BUS')) return short.split(' ')[0];
-        if (short.includes('TRAIN')) return 'Train';
-
-        // Return first 4 characters if nothing else matches
-        return short.substring(0, 4);
-    }
-
-    getContrastedTextColor(hexColor) {
-        const r = parseInt(hexColor.slice(1, 3), 16);
-        const g = parseInt(hexColor.slice(3, 5), 16);
-        const b = parseInt(hexColor.slice(5, 7), 16);
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        return luminance > 0.5 ? '#000000' : '#ffffff';
     }
 
     showStatus(message, type) {

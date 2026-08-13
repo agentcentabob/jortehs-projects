@@ -28,13 +28,19 @@
         </header>
 
         <div class="escalator-board" id="escalatorBoard">
+            <!-- Temporary/testing: welcome ticker above the top platform display -->
+            <div class="board-ticker" id="boardTicker"></div>
+
             <div class="platform-section" id="platform1Section">
                 <div class="platform-header platform-header--top">
                     <span class="header-time">
                         <span class="time-label">Time Now</span>
                         <span class="time-value" id="platform1HeaderTime"></span>
                     </span>
-                    <span class="header-title" id="platform1HeaderTitle">Platform –</span>
+                    <div class="header-title-group">
+                        <span class="header-title" id="platform1HeaderTitle">Platform –</span>
+                        <span class="header-next-stop" id="platform1NextStop"></span>
+                    </div>
                     <span class="header-arrow">→</span>
                 </div>
                 <div class="departures-list" id="platform1List"></div>
@@ -43,7 +49,10 @@
             <div class="platform-section" id="platform2Section">
                 <div class="platform-header platform-header--bottom">
                     <span class="header-arrow">←</span>
-                    <span class="header-title" id="platform2HeaderTitle">Platform –</span>
+                    <div class="header-title-group">
+                        <span class="header-title" id="platform2HeaderTitle">Platform –</span>
+                        <span class="header-next-stop" id="platform2NextStop"></span>
+                    </div>
                     <span class="header-time">
                         <span class="time-label">Time Now</span>
                         <span class="time-value" id="platform2HeaderTime"></span>

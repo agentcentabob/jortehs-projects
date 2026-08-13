@@ -147,8 +147,23 @@ button:active {
     overflow: hidden;
 }
 
+/* Temporary/testing welcome ticker above the top platform display */
+.board-ticker {
+    flex: 0 0 auto;
+    height: 45px;
+    background: #16213e;
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-size: 1.35em;
+    overflow: hidden;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
 .platform-section {
-    flex: 1 1 50%;
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -158,19 +173,20 @@ button:active {
     border-bottom: 4px solid #16213e;
 }
 
-/* Matches metro board's .board-header (height, background, padding, font-size).
-   Grid with equal fixed-width side columns keeps the platform title anchored
-   to the true center regardless of what the time/arrow columns contain. */
+/* Matches metro board's .board-header (background, padding), scaled up ~50%
+   (was 70px/1.6em). Grid with equal fixed-width side columns keeps the
+   platform title anchored to the true center regardless of what the
+   time/arrow columns contain. */
 .platform-header {
     display: grid;
-    grid-template-columns: 90px 1fr 90px;
+    grid-template-columns: 110px 1fr 110px;
     align-items: center;
-    height: 70px;
+    height: 105px;
     flex: 0 0 auto;
     background: var(--metro);
     color: var(--white);
     padding: 0 20px;
-    font-size: 1.6em;
+    font-size: 2.2em;
     box-sizing: border-box;
 }
 .header-time {
@@ -180,13 +196,18 @@ button:active {
     line-height: 1.15;
 }
 .time-label {
-    font-size: 0.4em;
+    font-size: 0.45em;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     opacity: 0.85;
 }
 .time-value {
-    font-size: 0.65em;
+    font-size: 0.75em;
+}
+.header-title-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 .header-title {
     font-size: 1.1em;
@@ -195,9 +216,24 @@ button:active {
     text-transform: uppercase;
     text-align: center;
 }
+/* Temporary/testing: next stop, shown under the platform number */
+.header-next-stop {
+    font-size: 0.5em;
+    font-style: italic;
+    opacity: 0.85;
+    margin-top: 2px;
+}
+/* Flex + line-height:1 centers the LINE BOX, but the → glyph's own ink sits
+   below the font's baseline-relative center (measured via canvas text metrics:
+   ~0.1em low at this size) - the translateY corrects for the glyph itself */
 .header-arrow {
-    font-size: 1em;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    line-height: 1;
+    font-size: 2.2em;
+    transform: translateY(-0.1em);
 }
 
 .departures-list {
@@ -208,11 +244,12 @@ button:active {
 }
 
 /* Grid (not flex) so the occupancy/time columns have fixed widths and never
-   shift position depending on how wide the time text ("NOW" vs "20 min") is */
+   shift position depending on how wide the time text ("NOW" vs "20 min") is.
+   Time column is 112px so two-digit minute counts never wrap. */
 .escalator-row {
     flex: 1 1 0;
     display: grid;
-    grid-template-columns: 1fr auto 90px;
+    grid-template-columns: 1fr auto 112px;
     align-items: center;
     gap: 16px;
     padding: 6px 24px;
@@ -256,34 +293,30 @@ button:active {
     text-overflow: ellipsis;
 }
 
+/* Stopping-pattern badge, below the destination - high-contrast white-on-black
+   for legibility (replaces the old "Good service" text in this position) */
 .row-badge {
-    flex: 0 0 auto;
-    border: 2px solid #888;
-    border-radius: 6px;
-    padding: 1px 8px;
-    font-size: 0.5em;
-    font-weight: 600;
+    display: inline-block;
+    background: #1a1a2e;
+    color: var(--white);
+    font-size: 0.7em;
+    font-weight: 500;
     text-transform: uppercase;
-    color: #555;
     letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 3px;
+}
+.row-badge.placeholder {
+    background: #ccc;
+    color: #888;
 }
 
-/* Service status line - smaller and with less top spacing than the metro
-   board's equivalent text, per request. Scrolls once text is too long to fit. */
-.row-status {
-    font-size: 0.7em;
-    color: #777;
-    margin-top: 1px;
-    overflow: hidden;
-    white-space: nowrap;
-}
-.row-status:empty {
-    display: none;
-}
-.row-status .status-text {
+/* Shared marquee mechanism for any scrolling-text container (ticker) */
+.status-text {
     display: inline-block;
 }
-.row-status.scrolling .status-text {
+.scrolling .status-text {
     padding-left: 100%;
     animation: marquee 10s linear infinite;
 }
@@ -291,6 +324,7 @@ button:active {
 .occupancy-icons {
     display: flex;
     gap: 2px;
+    margin-right: 14px; /* nudge occupancy left, away from the time column */
 }
 .occupancy-icons svg {
     width: 20px;
@@ -304,9 +338,10 @@ button:active {
 }
 
 .row-time {
-    font-size: 2em;
+    font-size: 2.2em;
     font-weight: 700;
     text-align: right;
+    white-space: nowrap;
 }
 .row-time.ontime { color: var(--ontime); }
 .row-time.minor { color: var(--minor); }

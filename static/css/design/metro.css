@@ -151,10 +151,13 @@ button:active {
     font-size: 1.6em;
     color: var(--white);
 }
-.header-left,
-.header-right {
+.header-left {
     flex: 0 0 auto;
     font-size: 1.8em !important;
+}
+.header-right {
+    flex: 0 0 auto;
+    font-size: 1.4em !important;
 }
 
 .departures-list {
@@ -179,78 +182,30 @@ button:active {
     background: #f5f5f5;
 }
 
-/* Metro mode: hide platform and mode columns */
-.metro-mode .platform,
-.metro-mode .mode {
-    display: none;
-}
-
-/* All modes: show all columns */
-.all-modes .platform,
-.all-modes .mode {
-    display: block;
-}
-
-/* Platform column styling */
-.departure-row .platform {
-    width: 60px;
-    min-width: 60px;
-    text-align: center;
-    font-size: 1.1em;
-    color: #666;
-}
-
 /* Destination column styling */
 .dest {
     display: flex;
     flex-direction: column;
 }
 
+/* Destination name and stopping pattern share a line */
+.dest .name-line {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
 /* Service name - make font size larger for better readability */
 .dest .service-name {
     font-size: 1.9em; /* increased from 1.6em for better readability */
     font-weight: 600;
-    margin-bottom: 6px;
 }
 
-/* Route number - shown only in all modes, with line color */
-.dest .route-number {
-    font-size: 1.1em;
-    font-weight: bold;
-    margin-top: 3px;
-}
-
-/* Mode text styling - slightly larger font */
-.dest .mode {
-    font-size: 0.9em;
-    color: #999;
-    margin-top: 5px;
-}
-
-/* Stopping pattern - slightly larger */
+/* Stopping pattern - to the right of the destination name */
 .dest .destination-via {
     font-size: 1.1em;
     color: #666;
-}
-
-/* Service status line - scrolls once text is too long to fit */
-.dest .service-status {
-    font-size: 14px;
-    color: #777;
-    margin-top: 4px;
-    overflow: hidden;
-    white-space: nowrap;
-}
-.dest .service-status .status-text {
-    display: inline-block;
-}
-.dest .service-status.scrolling .status-text {
-    padding-left: 100%;
-    animation: marquee 10s linear infinite;
-}
-@keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-100%); }
 }
 
 /* Keep other fonts as before but increase sizes */
@@ -274,6 +229,9 @@ button:active {
     fill: #ddd;
 }
 .departure-row .time {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     text-align: right;
     font-size: 2.2em;
     font-weight: 500;
@@ -327,10 +285,4 @@ button:active {
 }
 .error {
     color: var(--major);
-}
-
-/* Ensure the existing destination-main class still works if referenced elsewhere */
-.dest .destination-main {
-    font-size: 1.8em;
-    font-weight: normal;
 }

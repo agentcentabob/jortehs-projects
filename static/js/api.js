@@ -1,6 +1,8 @@
 // TfNSW API interaction module
 // Calls Flask backend
 
+import * as m1Line from './m1Line.js';
+
 class TfNSWAPI {
     constructor() {
         // point to Flask backend on port 5000
@@ -99,6 +101,20 @@ class TfNSWAPI {
         if (key.includes('FEW') || key.includes('STANDING')) return 2;
         if (key.includes('MANY') || key.includes('EMPTY')) return 1;
         return 0;
+    }
+
+    // M1 line topology (station order, "via City"/next-stop lookups) lives in
+    // m1Line.js - delegated here so design files keep calling api.<method>.
+    getStoppingPatternText(currentStation, destination, realStoppingPattern) {
+        return m1Line.getStoppingPatternText(currentStation, destination, realStoppingPattern);
+    }
+
+    getNextStop(currentStation, destination) {
+        return m1Line.getNextStop(currentStation, destination);
+    }
+
+    isM1Station(name) {
+        return m1Line.isM1Station(name);
     }
 
     // Map line names to their colors from styles.css
