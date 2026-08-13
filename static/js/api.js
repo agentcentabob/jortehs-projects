@@ -1,30 +1,25 @@
-// TfNSW API interaction module
-// Calls Flask backend
+// master api module - all tfnsw requests go through the flask backend
 
 import * as m1Line from './m1Line.js';
 
 class TfNSWAPI {
     constructor() {
-        // point to Flask backend on port 5000
         this.backendUrl = '/api';
     }
 
-    // Get raw departures data from the backend
     async getDeparturesRaw(stopId) {
         try {
             const response = await fetch(`${this.backendUrl}/departures?stop_id=${stopId}`);
             if (!response.ok) {
                 throw new Error(`API Error: ${response.status}`);
             }
-            const data = await response.json();
-            return data; // raw TfNSW API response
+            return await response.json();
         } catch (error) {
             console.error('Error fetching departures:', error);
             throw error;
         }
     }
 
-    // Search for stops by name
     async searchStops(query) {
         try {
             const response = await fetch(`${this.backendUrl}/stops?q=${encodeURIComponent(query)}`);
@@ -39,7 +34,7 @@ class TfNSWAPI {
         }
     }
 
-    // Parse raw TfNSW departure response into standardized format
+    // parses a raw tfnsw stopEvents response into a flat departure list
     parseDeparturesRaw(data) {
         const departures = [];
 
@@ -58,7 +53,7 @@ class TfNSWAPI {
                     ? this.calculateDelay(event.departureTimePlanned, event.departureTimeEstimated)
                     : 0,
                 mode: event.transportation?.product?.class || 'Unknown',
-                fleetType: event.transportation?.product?.name || '',
+                productName: event.transportation?.product?.name || '',
                 stoppingPattern: event.stop?.properties?.stopType || '',
                 occupancy: event.location?.properties?.occupancy ?? null
             };
@@ -68,32 +63,13 @@ class TfNSWAPI {
         return departures;
     }
 
-    // Calculate delay in minutes
     calculateDelay(planned, estimated) {
         const plannedTime = new Date(planned);
         const estimatedTime = new Date(estimated);
         return Math.round((estimatedTime - plannedTime) / 60000);
     }
 
-    // Get current date in YYYYMMDD format
-    getCurrentDate() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        return `${year}${month}${day}`;
-    }
-
-    // Get current time in HHMM format
-    getCurrentTime() {
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        return `${hours}${minutes}`;
-    }
-
-    // Map TfNSW's occupancy string (e.g. "MANY_SEATS", "FEW_SEATS") to a 1-3 crowding level.
-    // Returns 0 when there's no occupancy data for this service.
+    // maps tfnsw's occupancy string (e.g. "many_seats") to a 1-3 crowding level, 0 if unknown
     getOccupancyLevel(occupancy) {
         if (!occupancy) return 0;
         const key = String(occupancy).toUpperCase();
@@ -103,8 +79,7 @@ class TfNSWAPI {
         return 0;
     }
 
-    // M1 line topology (station order, "via City"/next-stop lookups) lives in
-    // m1Line.js - delegated here so design files keep calling api.<method>.
+    // m1 line topology lives in m1Line.js - delegated here so design files keep calling api.<method>
     getStoppingPatternText(currentStation, destination, realStoppingPattern) {
         return m1Line.getStoppingPatternText(currentStation, destination, realStoppingPattern);
     }
@@ -117,104 +92,101 @@ class TfNSWAPI {
         return m1Line.isM1Station(name);
     }
 
-    // Map line names to their colors from styles.css
-    getLineColor(lineName, mode) {
-        // Ensure mode is a string for safety
-        const modeString = mode && typeof mode === 'string' ? mode : '';
+    // categorizes a departure into one of six modes, for the multi-select filter.
+    // product.class alone is ambiguous (suburban/intercity trains share class 1),
+    // so this reads product name first and only falls back to the line prefix
+    getModeCategory(dep) {
+        const productName = (dep.productName || '').toLowerCase();
+        const line = (dep.line || '').toLowerCase();
 
-        // Create maps with lowercase keys for case-insensitive lookup
+        if (productName.includes('metro') || line.includes('metro')) return 'metro';
+        if (productName.includes('light rail')) return 'lightrail';
+        if (productName.includes('bus')) return 'bus';
+        if (productName.includes('ferr')) return 'ferry';
+        if (productName.includes('intercity') || productName.includes('regional') || productName.includes('coach')) return 'nswtl';
+        if (productName.includes('sydney trains')) return 'sydneytrains';
+
+        if (/^m\d/.test(line)) return 'metro';
+        if (/^l\d/.test(line) || line.includes('nlr')) return 'lightrail';
+        if (/^f\d/.test(line) || line.includes('stockton')) return 'ferry';
+        if (/^t\d/.test(line)) return 'sydneytrains';
+        if (line.includes('hunter') || line.includes('regional') || line.includes('coach')) return 'nswtl';
+        return 'bus';
+    }
+
+    // meaningful part of a platform string ("Platform 1" -> "1", "Stop A" -> "A")
+    getShortPlatform(platformString) {
+        if (!platformString) return '-';
+        const str = platformString.trim().toUpperCase();
+
+        const busMatch = str.match(/STOP\s*([A-Z])/);
+        if (busMatch) return busMatch[1];
+
+        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
+        if (platformMatch) return platformMatch[1];
+
+        const numMatch = str.match(/\d+/);
+        if (numMatch) return numMatch[0];
+
+        const letterMatch = str.match(/[A-Z]/);
+        if (letterMatch) return letterMatch[0];
+
+        return platformString;
+    }
+
+    // minutes until datetime, null if missing/invalid
+    getMinutesUntil(datetime) {
+        if (!datetime) return null;
+        const departure = new Date(datetime);
+        if (isNaN(departure.getTime())) return null;
+        return Math.round((departure - new Date()) / 60000);
+    }
+
+    // 3-icon crowding indicator markup, filled up to level (0-3)
+    renderOccupancyIcons(level) {
+        let html = '<div class="occupancy-icons" aria-label="crowding level">';
+        for (let i = 1; i <= 3; i++) {
+            const filled = level >= i;
+            html += `<svg viewBox="0 0 24 32" class="${filled ? 'occ-fill' : 'occ-empty'}"><circle cx="12" cy="7" r="6"/><path d="M2 30 C2 18 6 14 12 14 C18 14 22 18 22 30 Z"/></svg>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // resolves a line name to its brand colour css var from styles.css - exact match, then substring
+    getLineColor(lineName) {
         const varMap = {
-            // Rail lines
-            'T1': '--t1',
-            'T2': '--t2',
-            'T3': '--t3',
-            'T4': '--t4',
-            'T5': '--t5',
-            'T6': '--t6',
-            'T7': '--t7',
-            'T8': '--t8',
-            'T9': '--t9',
-            'Hunter': '--hunter',
-            'Regional': '--regional',
-            'Coaches': '--coaches',
-            // Ferry lines
-            'F1': '--f1',
-            'F2': '--f2',
-            'F3': '--f3',
-            'F4': '--f4',
-            'F5': '--f5',
-            'F6': '--f6',
-            'F7': '--f7',
-            'F8': '--f8',
-            'F9': '--f9',
-            'Stockton': '--stockton',
-            // Light Rail lines
-            'L1': '--l1',
-            'L2': '--l2',
-            'L3': '--l3',
-            'L4': '--l4',
-            'NLR': '--nlr',
-            // Metro
-            'Metro': '--metro',
-            // Fallbacks
-            'SydneyTrains': '--sydneytrains',
-            'NSWTL': '--nswtl',
-            'Bus': '--bus',
-            'LightRail': '--lightrail',
-            'Ferry': '--ferry'
+            T1: '--t1', T2: '--t2', T3: '--t3', T4: '--t4', T5: '--t5',
+            T6: '--t6', T7: '--t7', T8: '--t8', T9: '--t9',
+            Hunter: '--hunter', Regional: '--regional', Coaches: '--coaches',
+            F1: '--f1', F2: '--f2', F3: '--f3', F4: '--f4', F5: '--f5',
+            F6: '--f6', F7: '--f7', F8: '--f8', F9: '--f9', Stockton: '--stockton',
+            L1: '--l1', L2: '--l2', L3: '--l3', L4: '--l4', NLR: '--nlr',
+            Metro: '--metro', SydneyTrains: '--sydneytrains', NSWTL: '--nswtl',
+            Bus: '--bus', LightRail: '--lightrail', Ferry: '--ferry'
         };
+        const lowerCaseMap = new Map(Object.entries(varMap).map(([k, v]) => [k.toLowerCase(), v]));
+        const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || null;
 
-        const lowerCaseMap = new Map();
-        for (const [key, value] of Object.entries(varMap)) {
-            lowerCaseMap.set(key.toLowerCase(), value);
+        const key = (lineName || '').toLowerCase();
+        if (lowerCaseMap.has(key)) {
+            const value = cssVar(lowerCaseMap.get(key));
+            if (value) return value;
         }
-
-        // Normalize inputs
-        const nameKey = (lineName || '').toLowerCase();
-        const modeKey = (modeString || '').toLowerCase();
-
-        // Helper to get value from our map
-        const getValueFromMap = (key) => {
-            const value = lowerCaseMap.get(key);
-            if (value !== undefined) {
-                let result = getComputedStyle(document.documentElement).getPropertyValue(value).trim();
-                return result || null;
-            }
-            return null;
-        };
-
-        // 1. Try exact match on lineName
-        let result = getValueFromMap(nameKey);
-        if (result) return result;
-
-        // 2. Try partial matches on lineName
-        for (const [mapKey, value] of Object.entries(varMap)) {
-            const lowerMapKey = mapKey.toLowerCase();
-            if (nameKey.includes(lowerMapKey) || lowerMapKey.includes(nameKey)) {
-                let result = getValueFromMap(lowerMapKey);
-                if (result) return result;
+        for (const [mapKey, cssVarName] of lowerCaseMap) {
+            if (key.includes(mapKey) || mapKey.includes(key)) {
+                const value = cssVar(cssVarName);
+                if (value) return value;
             }
         }
 
-        // 3. Try exact match on mode (if provided and not empty)
-        if (modeString) {
-            let result = getValueFromMap(modeKey);
-            if (result) return result;
-        }
-
-        // 4. Try partial matches on mode (if provided and not empty)
-        if (modeString) {
-            for (const [mapKey, value] of Object.entries(varMap)) {
-                const lowerMapKey = mapKey.toLowerCase();
-                if (modeKey.includes(lowerMapKey) || lowerMapKey.includes(modeKey)) {
-                    let result = getValueFromMap(lowerMapKey);
-                    if (result) return result;
-                }
-            }
-        }
-
-        // 5. Fallback to default orange
-        return getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || '#a0a0a0';
+        return cssVar('--orange') || '#a0a0a0';
     }
 }
 

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Tactile Bumps</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/design/11dat/tactile-bumps.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <a href="/" class="back-link">← Back</a>
+                <h1>Digital Tactile Bumps</h1>
+            </div>
+        </header>
+
+        <p class="intro">
+            Concept demo: LED-backed tactile ground surface indicators (TGSIs) that change colour
+            to tell platform users when a train is arriving. This is an animation only for now &mdash;
+            it isn't wired up to live departure data yet.
+        </p>
+
+        <div class="platform-scene">
+            <div class="tracks-label">tracks</div>
+            <div class="tracks">
+                <div class="rail"></div>
+                <div class="rail"></div>
+            </div>
+
+            <div class="platform-edge">
+                <span class="platform-edge-label">platform edge</span>
+            </div>
+
+            <div class="tactile-strip state-idle" id="tactileStrip">
+                <div class="bump-row row-top"></div>
+                <div class="bump-row row-bottom"></div>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-label" id="statusLabel">Before train has arrived</div>
+
+            <div class="phase-controls" id="phaseControls">
+                <button type="button" class="phase-btn" data-state="idle">Before arrival</button>
+                <button type="button" class="phase-btn" data-state="arriving">Arriving / doors closing</button>
+                <button type="button" class="phase-btn" data-state="opening">Doors opening</button>
+                <button type="button" class="phase-btn" data-state="arrived">Doors open</button>
+            </div>
+
+            <div class="playback-controls">
+                <button type="button" id="playPauseBtn">Pause</button>
+                <button type="button" id="restartBtn">Restart</button>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><span class="swatch" style="background: var(--yellow);"></span> Before train has arrived</div>
+            <div class="legend-item"><span class="swatch flash-arrive"></span> Flashes while train is arriving / doors closing</div>
+            <div class="legend-item"><span class="swatch flash-open"></span> Flashes while doors are opening</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--ontime);"></span> Stays green after doors open</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--early);"></span> Bottom row stays blue throughout</div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/js/design/11dat/tactile-bumps.js"></script>
+</body>
+</html>

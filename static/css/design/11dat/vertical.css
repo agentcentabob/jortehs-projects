@@ -1,4 +1,4 @@
-/* Escalator Departure Board - two mirrored platform sections, portrait */
+/* two mirrored platform sections, portrait board */
 
 .container {
     max-width: 1400px;
@@ -7,20 +7,28 @@
 
 header {
     background: #16213e;
-    padding: 20px;
+    padding: 14px 20px;
     border-radius: 10px;
     margin: 10px;
 }
 
+.header-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 8px;
+}
+
 header h1 {
     color: var(--white);
-    font-size: 2em;
-    margin: 0px 0px 6px 0px;
+    font-size: 1.5em;
+    margin: 0;
 }
 
 .station-info {
-    margin-bottom: 10px;
-    font-size: 1.1em;
+    margin: 0;
+    font-size: 1em;
     color: var(--white);
 }
 
@@ -37,7 +45,7 @@ header h1 {
     display: inline-block;
     color: var(--white);
     text-decoration: none;
-    margin-bottom: 10px;
+    margin: 0;
     font-size: 1.1em;
 }
 
@@ -133,8 +141,7 @@ button:active {
     min-height: 20px;
 }
 
-/* Board dimensions: portrait TV screen, ~30% wider than the original rotated-metro size */
-.escalator-board {
+.vertical-board {
     display: flex;
     flex-direction: column;
     width: 624px;
@@ -147,7 +154,7 @@ button:active {
     overflow: hidden;
 }
 
-/* Temporary/testing welcome ticker above the top platform display */
+/* welcome ticker above the top platform - temporary/testing feature */
 .board-ticker {
     flex: 0 0 auto;
     height: 45px;
@@ -173,10 +180,7 @@ button:active {
     border-bottom: 4px solid #16213e;
 }
 
-/* Matches metro board's .board-header (background, padding), scaled up ~50%
-   (was 70px/1.6em). Grid with equal fixed-width side columns keeps the
-   platform title anchored to the true center regardless of what the
-   time/arrow columns contain. */
+/* equal fixed-width side columns keep the title centered regardless of what's in them */
 .platform-header {
     display: grid;
     grid-template-columns: 110px 1fr 110px;
@@ -216,16 +220,15 @@ button:active {
     text-transform: uppercase;
     text-align: center;
 }
-/* Temporary/testing: next stop, shown under the platform number */
+/* next stop, shown under the platform number - temporary/testing feature */
 .header-next-stop {
     font-size: 0.5em;
     font-style: italic;
     opacity: 0.85;
     margin-top: 2px;
 }
-/* Flex + line-height:1 centers the LINE BOX, but the → glyph's own ink sits
-   below the font's baseline-relative center (measured via canvas text metrics:
-   ~0.1em low at this size) - the translateY corrects for the glyph itself */
+/* flex centers the line box, but the arrow glyph's own ink sits below that -
+   translateY corrects for the glyph itself (measured via canvas text metrics) */
 .header-arrow {
     display: flex;
     align-items: center;
@@ -243,10 +246,9 @@ button:active {
     min-height: 0;
 }
 
-/* Grid (not flex) so the occupancy/time columns have fixed widths and never
-   shift position depending on how wide the time text ("NOW" vs "20 min") is.
-   Time column is 112px so two-digit minute counts never wrap. */
-.escalator-row {
+/* grid (not flex) so occupancy/time have fixed widths and don't shift with
+   the time text's length ("NOW" vs "20 min"); 112px so it never wraps */
+.vertical-row {
     flex: 1 1 0;
     display: grid;
     grid-template-columns: 1fr auto 112px;
@@ -258,17 +260,17 @@ button:active {
     min-height: 0;
     overflow: hidden;
 }
-.platform-section .escalator-row:last-child {
+.platform-section .vertical-row:last-child {
     border-bottom: none;
 }
 
-/* Second departure row gets a light grey background for contrast */
-.escalator-row:nth-child(2) {
+/* second departure row gets a light grey background for contrast */
+.vertical-row:nth-child(2) {
     background: #f5f5f5;
 }
 
-.escalator-row.placeholder .row-dest,
-.escalator-row.placeholder .row-time {
+.vertical-row.placeholder .row-dest,
+.vertical-row.placeholder .row-time {
     color: #bbb;
 }
 
@@ -293,8 +295,7 @@ button:active {
     text-overflow: ellipsis;
 }
 
-/* Stopping-pattern badge, below the destination - high-contrast white-on-black
-   for legibility (replaces the old "Good service" text in this position) */
+/* stopping-pattern badge, below the destination */
 .row-badge {
     display: inline-block;
     background: #1a1a2e;
@@ -312,7 +313,7 @@ button:active {
     color: #888;
 }
 
-/* Shared marquee mechanism for any scrolling-text container (ticker) */
+/* shared marquee mechanism for any scrolling-text container (ticker) */
 .status-text {
     display: inline-block;
 }

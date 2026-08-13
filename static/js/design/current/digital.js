@@ -1,22 +1,22 @@
-// import api from '../api.js';
-import api from '../api.js';
+import api from '../../api.js';
 
-class DepartureBoard {
+class DigitalBoard {
     constructor() {
         this.stopId = null;
         this.stopName = null;
         this.refreshInterval = null;
         this.searchTimeout = null;
-        this.allDepartures = []; // store all fetched departures
+        this.allDepartures = [];
         this.init();
     }
 
     init() {
-        // get DOM elements
         this.stopInput = document.getElementById('stopInput');
         this.loadBtn = document.getElementById('loadBtn');
         this.refreshBtn = document.getElementById('refreshBtn');
-        this.modeFilterEl = document.getElementById('modeFilter');
+        this.filterBtn = document.getElementById('filterBtn');
+        this.filterPanel = document.getElementById('filterPanel');
+        this.modeCheckboxes = Array.from(document.querySelectorAll('.mode-checkbox'));
         this.departuresEl = document.getElementById('departures');
         this.emptyStateEl = document.getElementById('emptyState');
         this.statusEl = document.getElementById('status');
@@ -25,12 +25,17 @@ class DepartureBoard {
         this.stationNameEl = document.getElementById('stationName');
         this.stationIdEl = document.getElementById('stationId');
 
-        // set up event listeners
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
-        this.modeFilterEl.addEventListener('change', () => this.renderDepartures());
 
-        // add search functionality
+        this.filterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filterPanel.classList.toggle('open');
+        });
+        this.modeCheckboxes.forEach(cb => {
+            cb.addEventListener('change', () => this.renderDepartures());
+        });
+
         this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
         this.stopInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -38,14 +43,16 @@ class DepartureBoard {
             }
         });
 
-        // close suggestions when clicking outside
+        // close suggestions/filter panel when clicking outside
         document.addEventListener('click', (e) => {
             if (e.target !== this.stopInput) {
                 this.suggestionsEl.style.display = 'none';
             }
+            if (!this.filterPanel.contains(e.target) && e.target !== this.filterBtn) {
+                this.filterPanel.classList.remove('open');
+            }
         });
 
-        // load from localStorage if available
         const savedStopId = localStorage.getItem('lastStopId');
         if (savedStopId) {
             this.stopInput.value = savedStopId;
@@ -55,7 +62,7 @@ class DepartureBoard {
     async handleSearch(e) {
         const query = e.target.value.trim();
 
-        if (query.length < 2) {
+        if (query.length < 4) {
             this.suggestionsEl.style.display = 'none';
             return;
         }
@@ -83,7 +90,7 @@ class DepartureBoard {
         stops.forEach(stop => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
-            item.innerHTML = `<span class="stop-name">${this.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
+            item.innerHTML = `<span class="stop-name">${api.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
             item.addEventListener('click', () => {
                 this.stopInput.value = stop.name;
                 this.stopId = stop.id;
@@ -105,14 +112,24 @@ class DepartureBoard {
             return;
         }
 
-        // Clear previous stop data
-        this.stopId = null;
-        this.stopName = null;
-
-        // if stopId is not already set from search, use the input value
-        if (!this.stopId) {
-            this.stopId = inputValue;
-            this.stopName = inputValue;
+        // keep the resolved id/name if the box still shows exactly what a suggestion
+        // set, otherwise resolve whatever was typed - name or stop id - via search
+        if (!(this.stopId && this.stopName === inputValue)) {
+            this.showStatus('Looking up station...', 'loading');
+            try {
+                const stops = await api.searchStops(inputValue);
+                if (stops.length > 0) {
+                    this.stopId = stops[0].id;
+                    this.stopName = stops[0].name;
+                } else {
+                    this.stopId = inputValue;
+                    this.stopName = inputValue;
+                }
+            } catch (error) {
+                console.error('Stop lookup error:', error);
+                this.stopId = inputValue;
+                this.stopName = inputValue;
+            }
         }
 
         localStorage.setItem('lastStopId', this.stopId);
@@ -138,12 +155,10 @@ class DepartureBoard {
         try {
             const rawData = await api.getDeparturesRaw(this.stopId);
             const departures = api.parseDeparturesRaw(rawData);
-            console.log('Fetched departures:', departures.length, departures);
             this.allDepartures = departures;
 
             if (departures.length === 0) {
-                // Show message in departures area
-                this.departuresEl.innerHTML = '<p class="no-departures">No departures found. Check the modal filter, stop id or selected date.</p>';
+                this.departuresEl.innerHTML = '<p class="no-departures">No departures found. Check the filters, stop id or selected date.</p>';
                 this.showStatus('No departures found', 'error');
                 this.displayStationInfo();
                 return;
@@ -151,7 +166,8 @@ class DepartureBoard {
 
             this.renderDepartures();
             this.displayStationInfo();
-            const now = new Date().toLocaleTimeString('en-AU', {
+            const now = new Date().toLocaleTimeString('en-GB', {
+                hour12: false,
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit'
@@ -178,38 +194,29 @@ class DepartureBoard {
         }
     }
 
-    // Return departures filtered by selected mode
+    // departures matching the checked filter modes
     getFilteredDepartures() {
-        if (!this.allDepartures) return [];
-        const filter = this.modeFilterEl ? this.modeFilterEl.value : 'all';
-        if (filter === 'all') return this.allDepartures;
-        return this.allDepartures.filter(dep => {
-            const mode = (dep.mode ?? '').toString().toLowerCase();
-            return mode === filter;
-        });
+        const selected = new Set(
+            this.modeCheckboxes.filter(cb => cb.checked).map(cb => cb.value)
+        );
+        return this.allDepartures.filter(dep => selected.has(api.getModeCategory(dep)));
     }
 
-    // Return platform label with appropriate prefix based on mode
+    // platform label prefixed by mode (stand/wharf/stop), plain for train/metro
     getPlatformLabel(dep) {
-        const shortPlatform = this.getShortPlatform(dep.platform);
+        const shortPlatform = api.getShortPlatform(dep.platform);
         if (!shortPlatform) return '-';
-        const mode = (dep.mode ?? '').toString().toLowerCase();
-        if (mode === 'bus') {
-            return `stand ${shortPlatform}`;
-        } else if (mode === 'ferry') {
-            return `wharf ${shortPlatform}`;
-        } else if (mode === 'lightrail') {
-            return `stop ${shortPlatform}`;
-        }
-        // for other modes (train, metro, etc.) just return the platform/shortPlatform
+        const mode = api.getModeCategory(dep);
+        if (mode === 'bus') return `stand ${shortPlatform}`;
+        if (mode === 'ferry') return `wharf ${shortPlatform}`;
+        if (mode === 'lightrail') return `stop ${shortPlatform}`;
         return shortPlatform;
     }
 
     renderDepartures(departuresToRender = this.getFilteredDepartures()) {
         try {
-            console.log('Rendering departures:', departuresToRender.length);
             if (departuresToRender.length === 0) {
-                this.departuresEl.innerHTML = '<p class="no-departures">No departures found. Check the modal filter, stop id or selected date.</p>';
+                this.departuresEl.innerHTML = '<p class="no-departures">No departures match the current filters.</p>';
                 return;
             }
             this.departuresEl.innerHTML = '';
@@ -219,39 +226,16 @@ class DepartureBoard {
                 row.className = 'departure-row';
 
                 const time = this.formatTime(dep.departureTime);
-                const minsUntil = this.getMinutesUntil(dep.departureTime);
-
-                let statusText = 'On time';
-                let statusClass = 'status-ontime';
-
-                if (minsUntil <= 2) {
-                    statusText = 'NOW';
-                    statusClass = 'status-soon';
-                } else if (dep.delay > 0) {
-                    statusText = `+${dep.delay} min`;
-                    statusClass = 'status-delayed';
-                } else if (minsUntil <= 5) {
-                    statusText = `${minsUntil} min`;
-                    statusClass = 'status-soon';
-                } else {
-                    statusText = `${minsUntil} min`;
-                }
-
                 const shortLine = this.getShortLineName(dep.line);
-                const lineColor = api.getLineColor(dep.line, dep.mode);
+                const lineColor = api.getLineColor(dep.line);
                 const lineStyle = `background-color: ${lineColor}; color: ${this.getContrastedTextColor(lineColor)}; border-radius:4px; padding:2px 6px;`;
-
                 const platformLabel = this.getPlatformLabel(dep);
-
-                // Fleet type and stopping pattern info (italic, no bullet)
-                const fleetInfo = dep.fleetType ? ` ${dep.fleetType}` : '';
-                const stoppingInfo = dep.stoppingPattern ? ` ${dep.stoppingPattern}` : '';
 
                 row.innerHTML = `
                     <div class="col-time">${time}</div>
-                    <div class="col-line" style="${lineStyle}">${this.escapeHtml(shortLine)}</div>
+                    <div class="col-line" style="${lineStyle}">${api.escapeHtml(shortLine)}</div>
                     <div class="col-destination">
-                        <div class="destination-main">${this.escapeHtml(dep.destination)}</div>
+                        <div class="destination-main">${api.escapeHtml(dep.destination)}</div>
                     </div>
                     <div class="col-platform">${platformLabel}</div>
                 `;
@@ -264,7 +248,6 @@ class DepartureBoard {
         }
     }
 
-    // Helper methods copied from the original api.js (formatting)
     formatTime(datetime) {
         const date = new Date(datetime);
         return date.toLocaleTimeString('en-AU', {
@@ -274,82 +257,36 @@ class DepartureBoard {
         });
     }
 
+    // relative luminance formula - picks readable text colour for a given background
     getContrastedTextColor(hexColor) {
-        // Convert hex to RGB
         const r = parseInt(hexColor.slice(1, 3), 16);
         const g = parseInt(hexColor.slice(3, 5), 16);
         const b = parseInt(hexColor.slice(5, 7), 16);
-
-        // Calculate luminance
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-        // Return white or black based on luminance
         return luminance > 0.5 ? '#000000' : '#ffffff';
-    }
-
-    getMinutesUntil(datetime) {
-        const now = new Date();
-        const departure = new Date(datetime);
-        const diff = Math.round((departure - now) / 60000);
-        return diff;
     }
 
     getShortLineName(lineName) {
         if (!lineName) return 'Unknown';
+        const short = lineName.trim().toUpperCase();
 
-        // remove spaces and convert to uppercase
-        let short = lineName.trim().toUpperCase();
+        // standalone line code (t1, m1, l2, f3...) - word boundary so this
+        // doesn't match a letter buried inside a word, e.g. the t in "metro"
+        const match = short.match(/\b([TFLM])(\d+)\b/);
+        if (match) return match[1] + match[2];
 
-        // extract just the line identifier (T1, F2, L3, etc)
-        const match = short.match(/([TFL])(\d+|[A-Z]+)/);
-        if (match) {
-            return match[1] + match[2];
-        }
-
-        // try other patterns
         if (short.includes('METRO')) return 'Metro';
         if (short.includes('BUS')) return short.split(' ')[0];
         if (short.includes('TRAIN')) return 'Train';
 
-        // Return first 4 characters if nothing else matches
         return short.substring(0, 4);
-    }
-
-    getShortPlatform(platformString) {
-        if (!platformString) return '-';
-
-        const str = platformString.trim().toUpperCase();
-
-        // For bus stops like "Stop A", "Stop B"
-        const busMatch = str.match(/STOP\s*([A-Z])/);
-        if (busMatch) return busMatch[1];
-
-        // For platforms like "Platform 1", "Platform 2"
-        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
-        if (platformMatch) return platformMatch[1];
-
-        // For numbered formats
-        const numMatch = str.match(/\d+/);
-        if (numMatch) return numMatch[0];
-
-        // For letter formats
-        const letterMatch = str.match(/[A-Z]/);
-        if (letterMatch) return letterMatch[0];
-
-        return platformString;
     }
 
     showStatus(message, type) {
         this.statusEl.textContent = message;
         this.statusEl.className = `status ${type}`;
     }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
 // initialise the board
-new DepartureBoard();
+new DigitalBoard();

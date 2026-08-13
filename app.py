@@ -19,7 +19,7 @@ def home():
     return render_template("index.html")
 
 
-@app.route("/design/<board_name>")
+@app.route("/design/<path:board_name>")
 def board(board_name):
     return render_template(f"design/{board_name}.html")
 
@@ -68,7 +68,7 @@ def get_departures():
 
 @app.route('/api/stops', methods=['GET'])
 def get_stops():
-    """Search for stops by name or stop ID"""
+    """search for stops by name or stop id"""
     search_query = request.args.get('q', '').strip()
     if not search_query:
         return jsonify({'stops': []})

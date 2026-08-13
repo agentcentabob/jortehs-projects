@@ -1,9 +1,6 @@
-// Sydney Metro M1 North West & Bankstown Line station order, Tallawong end to
-// Bankstown end (via the CBD). Not sourced from the API - TfNSW's departure_mon
-// response has no stopping-pattern/next-stop/onward-calls field for metro
-// services, so this is hardcoded from the line's public station list. Flag any
-// wrong name/order to get it corrected - names are matched against
-// dep.destination's short form.
+// sydney metro m1 line station order, tallawong to bankstown via the cbd.
+// not from the api - departure_mon has no stopping-pattern/next-stop data for
+// metro, so this is hardcoded from the public station list
 export const M1_LINE_ORDER = [
     'Tallawong', 'Rouse Hill', 'Kellyville', 'Bella Vista', 'Norwest',
     'Hills Showground', 'Castle Hill', 'Cherrybrook', 'Epping',
@@ -14,8 +11,7 @@ export const M1_LINE_ORDER = [
     'Wiley Park', 'Punchbowl', 'Bankstown'
 ];
 
-// Strips the display-name noise ("Station", ", Suburb") down to the plain
-// station name so it can be matched against M1_LINE_ORDER.
+// strips "station"/", suburb" from a display name so it matches m1_line_order
 export function normalizeStationName(name) {
     if (!name) return '';
     return name.split(',')[0].replace(/\s+Station$/i, '').trim();
@@ -26,17 +22,12 @@ export function getM1StationIndex(name) {
     return M1_LINE_ORDER.findIndex(s => s.toLowerCase() === normalized);
 }
 
-// True if `name` is one of the M1 line's stations. Used to reject non-metro
-// stations (real TfNSW stops that just aren't on this line) at load time.
-// This is deliberately scoped to "is it on the M1" only - a broader "is this
-// any real TfNSW stop ID at all" check is a planned site-wide feature, not this.
+// true if name is an m1 station - used to reject real but non-metro stops at load time
 export function isM1Station(name) {
     return getM1StationIndex(name) !== -1;
 }
 
-// True when travelling from `currentStation` to `destination` passes through
-// Gadigal (the City stations) - false if either station is unrecognised, or if
-// the board's own station is Gadigal itself (no "via" needed there).
+// true if the trip from currentStation to destination passes through gadigal (the city stations)
 export function isViaCity(currentStation, destination) {
     const currentIdx = getM1StationIndex(currentStation);
     const destIdx = getM1StationIndex(destination);
@@ -47,15 +38,13 @@ export function isViaCity(currentStation, destination) {
     return false;
 }
 
-// Builds the stopping-pattern text: real data (if TfNSW ever provides it)
-// always wins, otherwise falls back to the hardcoded "All stops[ via City]".
+// real stopping-pattern data wins if tfnsw ever provides it, otherwise "all stops[ via city]"
 export function getStoppingPatternText(currentStation, destination, realStoppingPattern) {
     if (realStoppingPattern) return realStoppingPattern;
     return isViaCity(currentStation, destination) ? 'All stops via City' : 'All stops';
 }
 
-// The immediate next station in the direction of `destination`, from
-// `currentStation`. Null if either station isn't recognised.
+// next station in the direction of destination, from currentStation
 export function getNextStop(currentStation, destination) {
     const currentIdx = getM1StationIndex(currentStation);
     const destIdx = getM1StationIndex(destination);

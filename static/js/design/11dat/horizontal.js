@@ -1,6 +1,6 @@
-import api from '../api.js';
+import api from '../../api.js';
 
-class MetroDepartureBoard {
+class HorizontalBoard {
     constructor() {
         this.stopId = null;
         this.stopName = null;
@@ -45,7 +45,6 @@ class MetroDepartureBoard {
             this.stopInput.value = savedStopId;
         }
 
-        // Start updating the header time
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
     }
@@ -64,7 +63,6 @@ class MetroDepartureBoard {
     async handleSearch(e) {
         const query = e.target.value.trim();
 
-        // Only search when at least 4 characters are entered
         if (query.length < 4) {
             this.suggestionsEl.style.display = 'none';
             return;
@@ -74,9 +72,7 @@ class MetroDepartureBoard {
         this.searchTimeout = setTimeout(async () => {
             try {
                 const stops = await api.searchStops(query);
-                // Limit to first 6 matches
-                const limitedStops = stops.slice(0, 6);
-                this.displaySuggestions(limitedStops);
+                this.displaySuggestions(stops.slice(0, 6));
             } catch (error) {
                 console.error('Search error:', error);
             }
@@ -94,7 +90,7 @@ class MetroDepartureBoard {
         stops.forEach(stop => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
-            item.innerHTML = `<span class="stop-name">${this.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
+            item.innerHTML = `<span class="stop-name">${api.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
             item.addEventListener('click', () => {
                 this.stopInput.value = stop.name;
                 this.stopId = stop.id;
@@ -116,9 +112,8 @@ class MetroDepartureBoard {
             return;
         }
 
-        // If the box still shows exactly what a suggestion click set, keep that
-        // resolved id/name. Otherwise resolve whatever was typed - name or stop ID -
-        // to a real stop via search, so either kind of input ends up with a real id.
+        // keep the resolved id/name if the box still shows exactly what a suggestion
+        // set, otherwise resolve whatever was typed - name or stop id - via search
         if (!(this.stopId && this.stopName === inputValue)) {
             this.showStatus('Looking up station...', 'loading');
             try {
@@ -137,9 +132,7 @@ class MetroDepartureBoard {
             }
         }
 
-        // This board only shows Metro (M1) departures - reject anything else here.
-        // A broader "is this any real TfNSW stop ID" check is a planned site-wide
-        // feature, not implemented yet.
+        // this board only shows metro (m1) departures - reject anything else here
         if (!api.isM1Station(this.stopName)) {
             this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
             this.stopId = null;
@@ -171,7 +164,7 @@ class MetroDepartureBoard {
             const rawData = await api.getDeparturesRaw(this.stopId);
             const departures = api.parseDeparturesRaw(rawData);
 
-            // This board only ever shows Metro departures
+            // this board only ever shows metro departures
             const filtered = departures.filter(dep =>
                 dep.line && dep.line.toLowerCase().includes('metro')
             );
@@ -182,19 +175,13 @@ class MetroDepartureBoard {
 
             if (filtered.length === 0) {
                 this.departuresEl.innerHTML = '';
-                this.displayStationInfo();
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                this.showStatus(`Last updated: ${timeStr}`, '');
-                return;
+            } else {
+                this.allDepartures = filtered;
+                this.renderDepartures();
             }
 
-            this.allDepartures = filtered;
-            this.renderDepartures();
-
             this.displayStationInfo();
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const timeStr = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
             this.showStatus(`Last updated: ${timeStr}`, '');
         } catch (error) {
             console.error('Error:', error);
@@ -216,8 +203,7 @@ class MetroDepartureBoard {
         }
     }
 
-    // Reverts the board to its initial "nothing loaded" state - used when a
-    // station turns out not to be a valid Metro station
+    // reverts the board to its initial empty state - used when a station turns out not to be metro
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
@@ -230,7 +216,7 @@ class MetroDepartureBoard {
     }
 
     renderDepartures() {
-        const departuresToRender = this.allDepartures.slice(0, 4); // Limit to 4 departures
+        const departuresToRender = this.allDepartures.slice(0, 4);
         if (departuresToRender.length === 0) {
             this.departuresEl.innerHTML = '<p class="no-departures">No departures</p>';
             return;
@@ -239,7 +225,7 @@ class MetroDepartureBoard {
         this.departuresEl.innerHTML = '';
 
         departuresToRender.forEach(dep => {
-            const minsUntil = this.getMinutesUntil(dep.departureTime);
+            const minsUntil = api.getMinutesUntil(dep.departureTime);
             let timeDisplay;
             let blinkClass = '';
             if (minsUntil === null) {
@@ -251,7 +237,6 @@ class MetroDepartureBoard {
                 }
             }
 
-            // Determine time colour based on delay
             let timeClass = 'ontime';
             if (dep.delay > 0) {
                 timeClass = dep.delay >= 3 ? 'major' : 'minor';
@@ -260,21 +245,19 @@ class MetroDepartureBoard {
             const row = document.createElement('div');
             row.className = 'departure-row';
 
-            // Destination column
             const destEl = document.createElement('div');
             destEl.className = 'dest';
 
-            // Destination name and stopping pattern share a line
+            // destination and stopping pattern share a line
             const nameLineEl = document.createElement('div');
             nameLineEl.className = 'name-line';
 
             const serviceNameEl = document.createElement('div');
             serviceNameEl.className = 'service-name';
-            serviceNameEl.textContent = this.escapeHtml(dep.destination) || 'Unknown';
+            serviceNameEl.textContent = api.escapeHtml(dep.destination) || 'Unknown';
             nameLineEl.appendChild(serviceNameEl);
 
-            // Stopping pattern - hardcoded "All stops[ via City]" default since TfNSW
-            // doesn't provide real stopping-pattern data for metro (see m1Line.js)
+            // tfnsw doesn't provide real stopping-pattern data for metro - see m1Line.js
             const stoppingPatternEl = document.createElement('div');
             stoppingPatternEl.className = 'destination-via';
             stoppingPatternEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);
@@ -283,13 +266,11 @@ class MetroDepartureBoard {
             destEl.appendChild(nameLineEl);
             row.appendChild(destEl);
 
-            // Occupancy column
             const occupancyEl = document.createElement('div');
             occupancyEl.className = 'occupancy';
-            occupancyEl.innerHTML = this.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
+            occupancyEl.innerHTML = api.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
             row.appendChild(occupancyEl);
 
-            // Time column
             const timeEl = document.createElement('div');
             timeEl.className = `time ${timeClass}`;
             timeEl.innerHTML = `<div class="mins ${blinkClass}">${timeDisplay}</div>`;
@@ -299,43 +280,10 @@ class MetroDepartureBoard {
         });
     }
 
-    renderOccupancyIcons(level) {
-        let html = '<div class="occupancy-icons" aria-label="crowding level">';
-        for (let i = 1; i <= 3; i++) {
-            const filled = level >= i;
-            html += `<svg viewBox="0 0 24 32" class="${filled ? 'occ-fill' : 'occ-empty'}"><circle cx="12" cy="7" r="6"/><path d="M2 30 C2 18 6 14 12 14 C18 14 22 18 22 30 Z"/></svg>`;
-        }
-        html += '</div>';
-        return html;
-    }
-
-    getMinutesUntil(datetime) {
-        // Handle null, undefined, or empty string
-        if (!datetime) {
-            return null;
-        }
-
-        const now = new Date();
-        const departure = new Date(datetime);
-
-        // Check if the date is valid
-        if (isNaN(departure.getTime())) {
-            return null;
-        }
-
-        return Math.round((departure - now) / 60000);
-    }
-
     showStatus(message, type) {
         this.statusEl.textContent = message;
         this.statusEl.className = `status ${type}`;
     }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
-new MetroDepartureBoard();
+new HorizontalBoard();

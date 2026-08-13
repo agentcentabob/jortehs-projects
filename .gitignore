@@ -6,6 +6,10 @@ fccsetup.md
 CLAUDE.md
 requests.md
 
+launch.json
+scheduled_tasks.lock
+settings.local.json
+
 # other
 todo.md
 

@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metro Departure Board</title>
+    <title>Horizontal Board</title>
     <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="/static/css/design/metro.css">
+    <link rel="stylesheet" href="/static/css/design/11dat/horizontal.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <a href="/" class="back-link">← Back</a>
-            <h1 class="header" id="h1">Revised Metro Departure Board</h1>
-            <div class="station-info" id="stationInfo" style="display: none;">
-                <span id="stationName"></span>
-                <span id="stationId"></span>
+            <div class="header-top">
+                <a href="/" class="back-link">← Back</a>
+                <h1 id="h1">Horizontal Board</h1>
+                <div class="station-info" id="stationInfo" style="display: none;">
+                    <span id="stationName"></span>
+                    <span id="stationId"></span>
+                </div>
             </div>
             <div class="controls">
                 <div class="search-container">
@@ -32,9 +34,7 @@
                 <span class="header-left" id="headerLeft"></span>
                 <span class="header-right" id="headerTime"></span>
             </div>
-            <div id="departures" class="departures-list">
-                <!-- departures will be inserted here -->
-            </div>
+            <div id="departures" class="departures-list"></div>
         </div>
 
         <div class="empty-state" id="emptyState">
@@ -42,6 +42,6 @@
         </div>
     </div>
 
-    <script type="module" src="/static/js/design/metro.js"></script>
+    <script type="module" src="/static/js/design/11dat/horizontal.js"></script>
 </body>
 </html>

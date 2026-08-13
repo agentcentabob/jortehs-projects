@@ -1,6 +1,6 @@
-// import api from '../api.js';
+// import api from '../../api.js';
 // We'll keep the import but change how we use it
-import api from '../api.js';
+import api from '../../api.js';
 
 class DepartureBoard {
     constructor() {

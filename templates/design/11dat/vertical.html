@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escalator Departure Board</title>
+    <title>Vertical Board</title>
     <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="/static/css/design/escalator.css">
+    <link rel="stylesheet" href="/static/css/design/11dat/vertical.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <a href="/" class="back-link">← Back</a>
-            <h1 id="h1">Escalator Departure Board</h1>
-            <div class="station-info" id="stationInfo" style="display: none;">
-                <span id="stationName"></span>
-                <span id="stationId"></span>
+            <div class="header-top">
+                <a href="/" class="back-link">← Back</a>
+                <h1 id="h1">Vertical Board</h1>
+                <div class="station-info" id="stationInfo" style="display: none;">
+                    <span id="stationName"></span>
+                    <span id="stationId"></span>
+                </div>
             </div>
             <div class="controls">
                 <div class="search-container">
@@ -27,8 +29,8 @@
             <div class="status" id="status"></div>
         </header>
 
-        <div class="escalator-board" id="escalatorBoard">
-            <!-- Temporary/testing: welcome ticker above the top platform display -->
+        <div class="vertical-board" id="verticalBoard">
+            <!-- welcome ticker above the top platform - temporary/testing feature -->
             <div class="board-ticker" id="boardTicker"></div>
 
             <div class="platform-section" id="platform1Section">
@@ -67,6 +69,6 @@
         </div>
     </div>
 
-    <script type="module" src="/static/js/design/escalator.js"></script>
+    <script type="module" src="/static/js/design/11dat/vertical.js"></script>
 </body>
 </html>

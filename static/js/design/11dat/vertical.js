@@ -1,8 +1,8 @@
-import api from '../api.js';
+import api from '../../api.js';
 
 const ROWS_PER_PLATFORM = 3;
 
-class EscalatorBoard {
+class VerticalBoard {
     constructor() {
         this.stopId = null;
         this.stopName = null;
@@ -19,7 +19,7 @@ class EscalatorBoard {
         this.suggestionsEl = document.getElementById('suggestions');
         this.statusEl = document.getElementById('status');
         this.emptyStateEl = document.getElementById('emptyState');
-        this.escalatorBoardEl = document.getElementById('escalatorBoard');
+        this.verticalBoardEl = document.getElementById('verticalBoard');
         this.stationInfoEl = document.getElementById('stationInfo');
         this.stationNameEl = document.getElementById('stationName');
         this.stationIdEl = document.getElementById('stationId');
@@ -54,7 +54,7 @@ class EscalatorBoard {
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
 
-        // Kiosk deployments load via ?stop_id=, dev/testing can still use the search bar
+        // kiosk deployments load via ?stop_id=, dev/testing can still use the search bar
         const params = new URLSearchParams(window.location.search);
         const urlStopId = params.get('stop_id');
         if (urlStopId) {
@@ -104,7 +104,7 @@ class EscalatorBoard {
         stops.forEach(stop => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
-            item.innerHTML = `<span class="stop-name">${this.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
+            item.innerHTML = `<span class="stop-name">${api.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
             item.addEventListener('click', () => {
                 this.stopInput.value = stop.name;
                 this.stopId = stop.id;
@@ -125,9 +125,8 @@ class EscalatorBoard {
             return;
         }
 
-        // If the box still shows exactly what a suggestion click set, keep that
-        // resolved id/name. Otherwise resolve whatever was typed - name or stop ID -
-        // to a real stop via search, so either kind of input ends up with a real id.
+        // keep the resolved id/name if the box still shows exactly what a suggestion
+        // set, otherwise resolve whatever was typed - name or stop id - via search
         if (!(this.stopId && this.stopName === inputValue)) {
             this.showStatus('Looking up station...', 'loading');
             try {
@@ -146,9 +145,7 @@ class EscalatorBoard {
             }
         }
 
-        // This board only shows Metro (M1) departures - reject anything else here.
-        // A broader "is this any real TfNSW stop ID" check is a planned site-wide
-        // feature, not implemented yet.
+        // this board only shows metro (m1) departures - reject anything else here
         if (!api.isM1Station(this.stopName)) {
             this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
             this.stopId = null;
@@ -175,11 +172,12 @@ class EscalatorBoard {
     async fetchAndDisplay() {
         this.showStatus('Loading departures...', 'loading');
         this.emptyStateEl.style.display = 'none';
-        this.escalatorBoardEl.style.display = 'flex';
+        this.verticalBoardEl.style.display = 'flex';
 
         try {
             const rawData = await api.getDeparturesRaw(this.stopId);
             const departures = api.parseDeparturesRaw(rawData);
+            // this board only ever shows metro departures
             this.allDepartures = departures.filter(dep =>
                 dep.line && dep.line.toLowerCase().includes('metro')
             );
@@ -192,7 +190,7 @@ class EscalatorBoard {
         } catch (error) {
             console.error('Error:', error);
             this.showStatus('Error loading departures. Check console for details.', 'error');
-            this.escalatorBoardEl.style.display = 'none';
+            this.verticalBoardEl.style.display = 'none';
             this.emptyStateEl.style.display = 'block';
             this.emptyStateEl.innerHTML = '<p>Error loading departures. Please check your API key and stop ID.</p>';
         }
@@ -210,24 +208,23 @@ class EscalatorBoard {
         }
     }
 
-    // Reverts the board to its initial "nothing loaded" state - used when a
-    // station turns out not to be a valid Metro station
+    // reverts the board to its initial empty state - used when a station turns out not to be metro
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
         }
-        this.escalatorBoardEl.style.display = 'none';
+        this.verticalBoardEl.style.display = 'none';
         this.stationInfoEl.style.display = 'none';
         this.emptyStateEl.style.display = 'block';
         this.emptyStateEl.innerHTML = '<p>Enter a stop ID or search for a station to load departures</p>';
     }
 
     renderBoard() {
-        // Group departures by platform, show the two busiest
+        // group departures by platform, show the two busiest
         const platformGroups = {};
         this.allDepartures.forEach(dep => {
-            const platform = this.getShortPlatform(dep.platform) || 'Unknown';
+            const platform = api.getShortPlatform(dep.platform) || 'Unknown';
             if (!platformGroups[platform]) platformGroups[platform] = [];
             platformGroups[platform].push(dep);
         });
@@ -251,9 +248,8 @@ class EscalatorBoard {
         this.updateTicker();
     }
 
-    // "Next stop" for a platform - derived from its first departure's direction,
-    // since a platform's queued departures all run the same way. Temporary/testing
-    // feature: not sourced from the API (see m1Line.js).
+    // next stop for a platform - derived from its first departure's direction,
+    // since a platform's queued departures all run the same way (see m1Line.js)
     updateNextStop(el, departures) {
         if (!el) return;
         const dest = departures && departures[0] ? departures[0].destination : null;
@@ -261,15 +257,14 @@ class EscalatorBoard {
         el.textContent = nextStop ? `Next stop ${nextStop}` : '';
     }
 
-    // Welcome ticker - temporary/testing feature above the top platform display
+    // welcome ticker above the top platform display
     updateTicker() {
         if (!this.boardTicker) return;
 
-        // Station name only, no suburb (e.g. "Central Station, Sydney" -> "Central Station")
+        // station name only, no suburb (e.g. "Central Station, Sydney" -> "Central Station")
         const shortStationName = (this.stopName || '').split(',')[0].trim();
 
-        // Line names come from the live departures - no hardcoded fallback, so
-        // this naturally stays correct as TfNSW extends/renames the line
+        // line names come from the live departures, so this stays correct as tfnsw extends the line
         const lines = [...new Set(this.allDepartures.map(dep => dep.line).filter(Boolean))];
         const message = lines.length > 0
             ? `Welcome to ${shortStationName}. Good service on ${lines.join(', ')}.`
@@ -278,8 +273,8 @@ class EscalatorBoard {
         this.setScrollingText(this.boardTicker, message);
     }
 
-    // Always renders exactly ROWS_PER_PLATFORM rows, padding with blank
-    // placeholders so the board layout never shifts when a platform is quiet
+    // always renders a fixed number of rows, padding with placeholders so the
+    // board layout never shifts when a platform is quiet
     renderPlatformRows(listEl, departures) {
         listEl.innerHTML = '';
 
@@ -291,7 +286,7 @@ class EscalatorBoard {
     }
 
     buildRow(dep) {
-        const minsUntil = this.getMinutesUntil(dep.departureTime);
+        const minsUntil = api.getMinutesUntil(dep.departureTime);
         let timeDisplay = '-';
         let blinkClass = '';
         if (minsUntil !== null) {
@@ -303,7 +298,7 @@ class EscalatorBoard {
         if (dep.delay > 0) timeClass = dep.delay >= 3 ? 'major' : 'minor';
 
         const row = document.createElement('div');
-        row.className = 'escalator-row';
+        row.className = 'vertical-row';
 
         const main = document.createElement('div');
         main.className = 'row-main';
@@ -318,8 +313,7 @@ class EscalatorBoard {
 
         main.appendChild(destLine);
 
-        // Stopping pattern - hardcoded "All stops[ via City]" default since TfNSW
-        // doesn't provide real stopping-pattern data for metro (see m1Line.js)
+        // tfnsw doesn't provide real stopping-pattern data for metro - see m1Line.js
         const badgeEl = document.createElement('div');
         badgeEl.className = 'row-badge';
         badgeEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);
@@ -327,10 +321,10 @@ class EscalatorBoard {
 
         row.appendChild(main);
 
-        // Occupancy and time are direct grid children (not nested in a flex wrapper)
-        // so their widths stay fixed regardless of how wide the time text is
+        // occupancy/time are direct grid children so their widths stay fixed
+        // regardless of how wide the time text is
         const occupancyEl = document.createElement('div');
-        occupancyEl.innerHTML = this.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
+        occupancyEl.innerHTML = api.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
         row.appendChild(occupancyEl.firstElementChild);
 
         const timeEl = document.createElement('div');
@@ -343,7 +337,7 @@ class EscalatorBoard {
 
     buildPlaceholderRow() {
         const row = document.createElement('div');
-        row.className = 'escalator-row placeholder';
+        row.className = 'vertical-row placeholder';
 
         const main = document.createElement('div');
         main.className = 'row-main';
@@ -361,7 +355,7 @@ class EscalatorBoard {
         row.appendChild(main);
 
         const occupancyEl = document.createElement('div');
-        occupancyEl.innerHTML = this.renderOccupancyIcons(0);
+        occupancyEl.innerHTML = api.renderOccupancyIcons(0);
         row.appendChild(occupancyEl.firstElementChild);
 
         const timeEl = document.createElement('div');
@@ -372,8 +366,7 @@ class EscalatorBoard {
         return row;
     }
 
-    // Sets text normally, or wraps it for a scrolling marquee once it's too
-    // long to fit (used by the welcome ticker)
+    // plain text, or a scrolling marquee once it's too long to fit (used by the ticker)
     setScrollingText(container, text) {
         container.textContent = '';
         container.classList.remove('scrolling');
@@ -386,52 +379,10 @@ class EscalatorBoard {
         }
     }
 
-    renderOccupancyIcons(level) {
-        let html = '<div class="occupancy-icons" aria-label="crowding level">';
-        for (let i = 1; i <= 3; i++) {
-            const filled = level >= i;
-            html += `<svg viewBox="0 0 24 32" class="${filled ? 'occ-fill' : 'occ-empty'}"><circle cx="12" cy="7" r="6"/><path d="M2 30 C2 18 6 14 12 14 C18 14 22 18 22 30 Z"/></svg>`;
-        }
-        html += '</div>';
-        return html;
-    }
-
-    getMinutesUntil(datetime) {
-        if (!datetime) return null;
-        const departure = new Date(datetime);
-        if (isNaN(departure.getTime())) return null;
-        return Math.round((departure - new Date()) / 60000);
-    }
-
-    getShortPlatform(platformString) {
-        if (!platformString) return '-';
-        const str = platformString.trim().toUpperCase();
-
-        const busMatch = str.match(/STOP\s*([A-Z])/);
-        if (busMatch) return busMatch[1];
-
-        const platformMatch = str.match(/PLATFORM\s*(\d+)/);
-        if (platformMatch) return platformMatch[1];
-
-        const numMatch = str.match(/\d+/);
-        if (numMatch) return numMatch[0];
-
-        const letterMatch = str.match(/[A-Z]/);
-        if (letterMatch) return letterMatch[0];
-
-        return platformString;
-    }
-
     showStatus(message, type) {
         this.statusEl.textContent = message;
         this.statusEl.className = `status ${type}`;
     }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
-new EscalatorBoard();
+new VerticalBoard();

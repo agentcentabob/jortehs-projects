@@ -3,47 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Departure Board</title>
+    <title>TfNSW Miniprojects</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}" />
 </head>
 <body>
     <div class="container">
-        <h1>Virtual Departure Boards</h1>
+        <h1>TfNSW Miniprojects</h1>
         <p class="subtitle">Redesigned public transport departure boards with real time data for NSW</p>
 
-        <div class="boards-grid">
-            <div class="board-card">
-                <a href="/design/starter">
-                    <h2>Starter Board</h2>
-                    <p><i>Earliest prototype. Directly vibe coded, no styling.</i></p>
-                </a>
+        <section class="category">
+            <h2 class="category-title">Current Boards</h2>
+            <p class="category-blurb">Actively developed, general-purpose departure board designs.</p>
+            <div class="boards-grid">
+                <div class="board-card">
+                    <a href="/design/current/digital">
+                        <h2>Digital Departure Board</h2>
+                        <p>Modern design made for digital users</p>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="category">
+            <h2 class="category-title">11DAT Project</h2>
+            <p class="category-blurb">Designs made for 11DAT - AT2: Student Negotiated Project (Redesigning wayfinding at Central Station).</p>
+
+            <div class="subcategory">
+                <h3 class="category-subheading">Metro Departure Boards</h3>
+                <div class="boards-grid">
+                    <div class="board-card">
+                        <a href="/design/11dat/horizontal">
+                            <h2>Horizontal Board</h2>
+                            <p>Improved Sydney Metro departure boards with improvements for readability</p>
+                        </a>
+                    </div>
+
+                    <div class="board-card">
+                        <a href="/design/11dat/vertical">
+                            <h2>Vertical Board</h2>
+                            <p>Vertical dual-platform board for the bottom of the metro platform escalator</p>
+                        </a>
+                    </div>
+                </div>
             </div>
 
-        <div class="board-card">
-                <a href="/design/second">
-                    <h2>Modern Board</h2>
-                    <p><i>Modern design made for digital users</i></p>
-                </a>
-        </div>
-        </div>
+            <hr class="category-divider">
 
-        <p class="subtitle"><i>Below designs part of 11DAT - AT2: Student Negotiated Project (Redesigning wayfinding at Central Station)</i></p>
-        <div class="boards-grid">
-        <div class="board-card">
-                <a href="/design/metro">
-                    <h2>Metro Board</h2>
-                    <p>Improved Sydney Metro departure boards with improvements for readability</p>
-                </a>
-        </div>
+            <div class="subcategory">
+                <h3 class="category-subheading">Other 11DAT Projects</h3>
+                <div class="boards-grid">
+                    <div class="board-card">
+                        <a href="/design/11dat/tactile-bumps">
+                            <h2>Digital Tactile Bumps</h2>
+                            <p>Not a departure board - a separate wayfinding concept for the same project. In early development.</p>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-        <div class="board-card">
-                <a href="/design/escalator">
-                    <h2>Escalator Board</h2>
-                    <p>Vertical dual-platform board for the bottom of the metro platform escalator</p>
-                </a>
-        </div>
-        </div>
+        <section class="category category-archived">
+            <h2 class="category-title">Archived</h2>
+            <p class="category-blurb">Earlier prototypes, kept for reference. No longer actively developed.</p>
+            <div class="boards-grid">
+                <div class="board-card">
+                    <a href="/design/archived/starter">
+                        <h2>Starter Board</h2>
+                        <p><i>Earliest prototype. Directly vibe coded, no styling.</i></p>
+                    </a>
+                </div>
+            </div>
+        </section>
     </div>
 </body>
 <footer>made by jorteh :)</footer>

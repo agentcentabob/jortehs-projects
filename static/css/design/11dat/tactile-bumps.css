@@ -1,0 +1,257 @@
+body {
+    margin: 0;
+    padding: 20px;
+    background: #000;
+    color: #eee;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+header {
+    background: #16213e;
+    padding: 14px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.header-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+
+header h1 {
+    margin: 0;
+    color: var(--white);
+    font-size: 1.5em;
+}
+
+.back-link {
+    display: inline-block;
+    color: var(--white);
+    text-decoration: none;
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.intro {
+    color: var(--l-gray);
+    max-width: 900px;
+    line-height: 1.5;
+    margin: 0 0 24px;
+}
+
+/* platform scene */
+
+.platform-scene {
+    background: #0a0a12;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 20px 20px 0;
+    overflow: hidden;
+}
+
+.tracks-label {
+    text-align: right;
+    color: var(--l-gray);
+    font-size: 0.85em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.tracks {
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+    padding: 10px 0 20px;
+}
+
+.rail {
+    position: relative;
+    height: 2px;
+    background: #555;
+}
+
+.rail::before {
+    content: "";
+    position: absolute;
+    inset: -16px 0;
+    background-image: repeating-linear-gradient(
+        to right,
+        #333,
+        #333 2px,
+        transparent 2px,
+        transparent 60px
+    );
+    background-position: center;
+    pointer-events: none;
+}
+
+.platform-edge {
+    position: relative;
+    border-top: 3px solid #ccc;
+    border-bottom: 1px solid #666;
+    margin-bottom: 4px;
+}
+
+.platform-edge-label {
+    position: absolute;
+    left: 0;
+    top: -22px;
+    color: var(--l-gray);
+    font-size: 0.85em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* tactile bump strip */
+
+.tactile-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0 20px;
+}
+
+.bump-row {
+    height: 46px;
+    border-radius: 4px;
+    background-color: var(--yellow);
+    background-image:
+        radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.05) 45%, transparent 60%),
+        radial-gradient(circle at center, rgba(0, 0, 0, 0.3) 46%, transparent 48%);
+    background-size: 34px 34px;
+    background-position: 17px center;
+    transition: background-color 0.35s ease;
+}
+
+.row-bottom {
+    background-color: var(--early);
+}
+
+/* state: before train has arrived */
+.state-idle .row-top {
+    background-color: var(--yellow);
+    animation: none;
+}
+
+/* state: train arriving, doors closing - flash between bright colours */
+.state-arriving .row-top {
+    animation: flash-arrive 0.6s infinite;
+}
+
+/* state: doors opening - flash between bright colours */
+.state-opening .row-top {
+    animation: flash-open 0.4s infinite;
+}
+
+/* state: after train has arrived, doors open - settles on green */
+.state-arrived .row-top {
+    background-color: var(--ontime);
+    animation: none;
+}
+
+.row-bottom {
+    animation: none !important;
+    background-color: var(--early) !important;
+}
+
+@keyframes flash-arrive {
+    0%, 100% { background-color: #F06292; }
+    50% { background-color: var(--orange); }
+}
+
+@keyframes flash-open {
+    0%, 100% { background-color: var(--orange); }
+    50% { background-color: #00FF00; }
+}
+
+/* status + controls */
+
+.status-panel {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.status-label {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--white);
+    min-height: 1.4em;
+    margin-bottom: 14px;
+}
+
+.phase-controls,
+.playback-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.phase-btn,
+.playback-controls button {
+    background: #16213e;
+    color: var(--white);
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.phase-btn:hover,
+.playback-controls button:hover {
+    background: #223154;
+}
+
+.phase-btn.active {
+    background: var(--ontime);
+    border-color: var(--ontime);
+}
+
+/* legend */
+
+.legend {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 28px;
+    justify-content: center;
+    color: var(--l-gray);
+    font-size: 0.9em;
+    padding-bottom: 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.flash-arrive {
+    animation: flash-arrive 0.6s infinite;
+}
+
+.flash-open {
+    animation: flash-open 0.4s infinite;
+}

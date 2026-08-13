@@ -12,20 +12,28 @@ body {
 
 header {
     background: #16213e;
-    padding: 20px;
+    padding: 14px 20px;
     border-radius: 10px;
     margin-bottom: 20px;
 }
 
+.header-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 8px;
+}
+
 header h1 {
-    margin: 0 0 15px 0;
+    margin: 0;
     color: var(--white);
-    font-size: 2em;
+    font-size: 1.5em;
 }
 
 .station-info {
-    margin-bottom: 15px;
-    font-size: 1.1em;
+    margin: 0;
+    font-size: 1em;
     color: var(--white);
 }
 
@@ -42,7 +50,7 @@ header h1 {
     display: inline-block;
     color: var(--white);
     text-decoration: none;
-    margin-bottom: 10px;
+    margin: 0;
     font-size: 1.1em;
 }
 
@@ -138,24 +146,47 @@ button:active {
     min-height: 20px;
 }
 
-/* Filter select */
-#modeFilter {
+.filter-container {
+    position: relative;
+}
+
+#filterBtn {
     padding: 10px 20px;
     background: var(--white);
     border: 1px solid var(--l-gray);
     border-radius: 5px;
     font-size: 1em;
     color: #1a1a2e;
+}
+
+.filter-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: #0f3460;
+    border: 2px solid var(--white);
+    border-radius: 5px;
+    padding: 10px 14px;
+    z-index: 1000;
+    min-width: 180px;
+}
+
+.filter-panel.open {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-panel label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #eee;
+    font-size: 0.95em;
     cursor: pointer;
 }
-
-/* Make filter red and italic as requested (feature not yet available) */
-#modeFilter {
-    color: red;
-    font-style: italic;
-}
-
-/* Tooltip already set via title attribute */
 
 .board {
     background: var(--white);
@@ -183,13 +214,13 @@ button:active {
 .departure-row {
     display: grid;
     grid-template-columns: 80px 100px 1fr 100px;
-    gap: 0 10px; /* row-gap 0, column-gap 10px */
+    gap: 0 10px;
     padding: 15px 20px;
     background: var(--white);
     color: #000;
     border: 1px solid #ddd;
     border-radius: 8px;
-    margin-bottom: 0; /* remove vertical space between rows */
+    margin-bottom: 0;
     animation: fadeIn 0.3s ease;
 }
 
@@ -233,29 +264,6 @@ button:active {
     color: var(--white);
 }
 
-.time-mins {
-    display: block;
-    font-size: 1em;
-}
-
-.time-delay {
-    display: block;
-    font-size: 0.85em;
-    margin-top: 2px;
-}
-
-.delay-ontime {
-    color: var(--ontime);
-}
-
-.delay-minor {
-    color: var(--minor);
-}
-
-.delay-major {
-    color: var(--major);
-}
-
 .col-line {
     font-weight: bold;
     text-align: center;
@@ -273,22 +281,11 @@ button:active {
     text-overflow: ellipsis;
 }
 
-.destination-info {
-    font-size: 0.8em;
-    color: var(--l-gray);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: 2px;
-    font-style: italic;
-}
-
 .col-platform {
     text-align: center;
     color: var(--white);
 }
 
-/* No departures message */
 .no-departures {
     text-align: center;
     color: var(--dark-gray);
