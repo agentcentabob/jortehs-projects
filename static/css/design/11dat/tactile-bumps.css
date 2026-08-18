@@ -1,3 +1,12 @@
+/* --led has to be registered before it can be animated - browsers won't animate an
+   unregistered custom property at all. paired with step-end below, this gives a hard
+   binary flash rather than a fade between the two colours. */
+@property --led {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #FFFF00;
+}
+
 body {
     margin: 0;
     padding: 20px;
@@ -121,11 +130,13 @@ header h1 {
     pointer-events: none;
 }
 
+/* no bottom margin - the concrete surface below must butt straight up against
+   the edge so the grey is unbroken from here to the base of the scene */
 .platform-edge {
     position: relative;
     border-top: 3px solid #ccc;
     border-bottom: 1px solid #666;
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .platform-edge-label {
@@ -140,60 +151,77 @@ header h1 {
 
 /* tactile bump strip */
 
+/* the concrete platform surface - runs solid from the platform edge down to the
+   base of the scene, with the LED rows set into it */
 .tactile-strip {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 0 20px;
+    gap: 4px;
+    background: #b4b4ad;
+    margin: 0 -20px;
+    padding: 14px 20px 26px;
 }
 
+/* LED lenses set into the concrete. no per-dot elements - the whole row is one
+   tiled gradient, so row height and background-size must stay in step. */
 .bump-row {
-    height: 46px;
-    border-radius: 4px;
+    height: 34px;
+    --led: var(--yellow);
     background-image:
-        radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.05) 45%, transparent 60%),
-        radial-gradient(circle at center, rgba(0, 0, 0, 0.3) 46%, transparent 48%);
-    background-size: 34px 34px;
-    background-position: 17px center;
-    transition: background-color 0.35s ease;
+        /* the lens: hot core, body, bright edge, then a dark recessed seat */
+        radial-gradient(circle at 50% 44%,
+            color-mix(in srgb, var(--led) 45%, #fff) 0 11%,
+            var(--led) 19% 32%,
+            color-mix(in srgb, var(--led) 72%, #000) 33% 37%,
+            rgba(38, 38, 34, 0.9) 38% 43%,
+            transparent 45%),
+        /* light spilling out onto the surrounding concrete */
+        radial-gradient(circle at center,
+            color-mix(in srgb, var(--led) 40%, transparent) 0 44%,
+            color-mix(in srgb, var(--led) 14%, transparent) 54%,
+            transparent 68%);
+    background-size: 30px 30px;
+    background-position: center;
 }
 
-/* only the top row responds to train state - the bottom row is the constant
-   blue reference strip from the sketch */
-.row-top {
-    background-color: var(--yellow);
-}
-
+/* the two upper rows respond to train state; the four below are a constant
+   blue reference band, per the original sketch */
 .row-bottom {
-    background-color: var(--early);
+    --led: var(--early);
 }
 
 .state-idle .row-top {
-    background-color: var(--yellow);
+    --led: var(--yellow);
     animation: none;
 }
 
-.state-arriving .row-top {
-    animation: flash-arrive 0.6s infinite;
+.state-arriving .row-top,
+.state-closing .row-top {
+    animation: flash-alert 0.7s step-end infinite;
 }
 
 .state-opening .row-top {
-    animation: flash-open 0.4s infinite;
+    animation: flash-open 0.5s step-end infinite;
 }
 
 .state-arrived .row-top {
-    background-color: var(--ontime);
+    --led: #35DC4F;
     animation: none;
 }
 
-@keyframes flash-arrive {
-    0%, 100% { background-color: #F06292; }
-    50% { background-color: var(--orange); }
+/* step-end holds each value until the next keyframe, so the colour jumps rather
+   than fading. literal colours here - keyframe values on a registered property
+   resolve more reliably than nested var() references. */
+@keyframes flash-alert {
+    0% { --led: #FF1717; }
+    50% { --led: #FF6A00; }
+    100% { --led: #FF1717; }
 }
 
 @keyframes flash-open {
-    0%, 100% { background-color: var(--orange); }
-    50% { background-color: #00FF00; }
+    0% { --led: #35DC4F; }
+    50% { --led: #0096FF; }
+    100% { --led: #35DC4F; }
 }
 
 /* info box */
@@ -216,42 +244,62 @@ header h1 {
     font-weight: 600;
 }
 
-.info-status {
-    margin-top: 10px;
-    color: var(--ontime);
-    font-size: 0.95em;
+/* line badge, coloured with the same brand colours the departure boards use */
+.line-badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.9em;
+    margin-right: 8px;
+    vertical-align: middle;
 }
 
-.info-status.error {
+/* id selectors so these beat the plain `.info-line strong` colour above */
+#infoStatus.error {
     color: var(--major);
 }
 
-.info-status.demo {
+#infoStatus.demo {
     color: var(--minor);
 }
 
 /* demo controls */
 
+/* deliberately understated and tucked to one side - it's a presentation aid,
+   not part of the design being demonstrated */
 .demo-panel {
-    margin-top: 16px;
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
 }
 
 .demo-toggle {
     background: none;
     border: none;
-    color: var(--l-gray);
-    font-size: 0.85em;
-    text-decoration: underline;
+    color: #6a6a7a;
+    font-size: 0.8em;
     cursor: pointer;
-    padding: 0;
+    padding: 4px 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.demo-toggle::before {
+    content: "\2699";
+    font-size: 1.1em;
+    line-height: 1;
 }
 
 .demo-toggle:hover {
-    color: var(--white);
+    color: var(--l-gray);
 }
 
 .demo-controls {
     margin-top: 12px;
+    width: 100%;
     padding: 14px 16px;
     background: #0a0a12;
     border: 1px solid #2a2a3a;
@@ -297,36 +345,99 @@ header h1 {
     border-color: var(--ontime);
 }
 
-/* legend */
+/* key */
 
-.legend {
-    margin-top: 28px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px 28px;
+.key {
+    margin-top: 32px;
+    padding-bottom: 40px;
+}
+
+.key-title {
+    color: var(--white);
+    font-size: 1.2em;
+    margin: 0 0 6px;
+}
+
+.key-intro {
     color: var(--l-gray);
     font-size: 0.9em;
-    padding-bottom: 20px;
+    margin: 0 0 16px;
 }
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.key-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
 }
 
-.swatch {
+.key-table th {
+    text-align: left;
+    color: var(--l-gray);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    letter-spacing: 0.05em;
+    padding: 0 12px 8px 0;
+    border-bottom: 1px solid #2a2a3a;
+}
+
+.key-table td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid #1c1c2c;
+    color: var(--l-gray);
+    vertical-align: middle;
+}
+
+.key-table td:nth-child(2) {
+    color: var(--white);
+    white-space: nowrap;
+}
+
+/* key swatches use the same LED-in-concrete recipe as the strip itself, so the
+   two stay visually identical - change one, change both */
+.key-led {
     display: inline-block;
-    width: 16px;
-    height: 16px;
+    width: 60px;
+    height: 30px;
+    border-radius: 2px;
+    --led: var(--yellow);
+    background-color: #b4b4ad;
+    background-image:
+        radial-gradient(circle at 50% 44%,
+            color-mix(in srgb, var(--led) 45%, #fff) 0 11%,
+            var(--led) 19% 32%,
+            color-mix(in srgb, var(--led) 72%, #000) 33% 37%,
+            rgba(38, 38, 34, 0.9) 38% 43%,
+            transparent 45%),
+        radial-gradient(circle at center,
+            color-mix(in srgb, var(--led) 40%, transparent) 0 44%,
+            color-mix(in srgb, var(--led) 14%, transparent) 54%,
+            transparent 68%);
+    background-size: 30px 30px;
+    background-position: center;
+}
+
+.led-idle { --led: var(--yellow); }
+.led-arrived { --led: #35DC4F; }
+.led-constant { --led: var(--early); }
+.led-alert { animation: flash-alert 0.7s step-end infinite; }
+.led-open { animation: flash-open 0.5s step-end infinite; }
+
+.key-reference {
+    margin: 18px 0 0;
+    color: var(--l-gray);
+    font-size: 0.85em;
+    line-height: 1.6;
+    max-width: 900px;
+}
+
+.key-reference a {
+    color: var(--bus);
+}
+
+.key-reference code {
+    background: #16213e;
+    padding: 1px 5px;
     border-radius: 3px;
-    flex-shrink: 0;
-}
-
-.flash-arrive {
-    animation: flash-arrive 0.6s infinite;
-}
-
-.flash-open {
-    animation: flash-open 0.4s infinite;
+    font-size: 0.95em;
 }

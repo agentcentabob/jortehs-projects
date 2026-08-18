@@ -63,7 +63,13 @@ class TfNSWAPI {
         data.stopEvents.forEach(event => {
             const departure = {
                 line: event.transportation?.number || 'Unknown',
+                // short code ("T1", "M1", "BMT") for compact line badges
+                lineShort: event.transportation?.disassembledName || '',
                 destination: event.transportation?.destination?.name || 'Unknown',
+                // cancelled services are still returned by departure_mon, flagged two
+                // ways - both are checked because neither appears on its own reliably
+                isCancelled: event.isCancelled === true
+                    || (Array.isArray(event.realtimeStatus) && event.realtimeStatus.includes('TRIP_CANCELLED')),
                 departureTime: event.departureTimePlanned || event.departureTimeEstimated,
                 // both exposed separately so callers that need the realtime figure
                 // (rather than the timetabled one) can prefer estimated
@@ -204,6 +210,9 @@ class TfNSWAPI {
             F1: '--f1', F2: '--f2', F3: '--f3', F4: '--f4', F5: '--f5',
             F6: '--f6', F7: '--f7', F8: '--f8', F9: '--f9', Stockton: '--stockton',
             L1: '--l1', L2: '--l2', L3: '--l3', L4: '--l4', NLR: '--nlr',
+            // M1 must be listed explicitly - the short code alone doesn't contain
+            // "metro", so it would otherwise fall through to the default colour
+            M1: '--metro',
             Metro: '--metro', SydneyTrains: '--sydneytrains', NSWTL: '--nswtl',
             Bus: '--bus', LightRail: '--lightrail', Ferry: '--ferry'
         };

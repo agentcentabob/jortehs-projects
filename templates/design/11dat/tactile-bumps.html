@@ -39,6 +39,10 @@
 
             <div class="tactile-strip state-idle" id="tactileStrip">
                 <div class="bump-row row-top"></div>
+                <div class="bump-row row-top"></div>
+                <div class="bump-row row-bottom"></div>
+                <div class="bump-row row-bottom"></div>
+                <div class="bump-row row-bottom"></div>
                 <div class="bump-row row-bottom"></div>
             </div>
         </div>
@@ -50,12 +54,17 @@
             <div class="info-line">
                 Next service: <strong id="infoService">—</strong>
             </div>
-            <div class="info-status" id="infoStatus">Connecting…</div>
+            <div class="info-line">
+                Train status: <strong id="infoStatus">Connecting…</strong>
+            </div>
+            <div class="info-line">
+                Indicator showing: <strong id="infoLights">—</strong>
+            </div>
         </div>
 
         <div class="demo-panel">
             <button type="button" class="demo-toggle" id="demoToggle" aria-expanded="false">
-                Show demo controls
+                <span class="demo-toggle-text">Demo controls</span>
             </button>
             <div class="demo-controls" id="demoControls" hidden>
                 <p class="demo-note">
@@ -64,22 +73,72 @@
                 </p>
                 <div class="phase-controls">
                     <button type="button" class="phase-btn" data-state="idle">Before arrival</button>
-                    <button type="button" class="phase-btn" data-state="arriving">Arriving / doors closing</button>
+                    <button type="button" class="phase-btn" data-state="arriving">Arriving</button>
                     <button type="button" class="phase-btn" data-state="opening">Doors opening</button>
                     <button type="button" class="phase-btn" data-state="arrived">Doors open</button>
+                    <button type="button" class="phase-btn" data-state="closing">Doors closing</button>
                     <button type="button" class="phase-btn" id="cycleBtn">Auto-cycle</button>
                 </div>
                 <button type="button" class="resume-btn" id="resumeLiveBtn">Return to live data</button>
             </div>
         </div>
 
-        <div class="legend">
-            <div class="legend-item"><span class="swatch" style="background: var(--yellow);"></span> Before train has arrived</div>
-            <div class="legend-item"><span class="swatch flash-arrive"></span> Flashes while train is arriving / doors closing</div>
-            <div class="legend-item"><span class="swatch flash-open"></span> Flashes while doors are opening</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--ontime);"></span> Stays green after doors open</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--early);"></span> Bottom row stays blue throughout</div>
-        </div>
+        <section class="key">
+            <h2 class="key-title">Key</h2>
+            <p class="key-intro">
+                What each colour on the platform edge means, in the order a passenger sees them.
+            </p>
+
+            <table class="key-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Indicator</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Meaning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="key-led led-idle"></span></td>
+                        <td>Steady yellow</td>
+                        <td>No train at the platform. Standard tactile indicator colour.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="key-led led-alert"></span></td>
+                        <td>Flashing red / orange</td>
+                        <td>Train arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="key-led led-open"></span></td>
+                        <td>Flashing green / blue</td>
+                        <td>Doors opening. Runs for about 5 seconds.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="key-led led-arrived"></span></td>
+                        <td>Steady green</td>
+                        <td>Doors open, safe to board.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="key-led led-alert"></span></td>
+                        <td>Flashing red / orange</td>
+                        <td>Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure — whichever is later.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="key-led led-constant"></span></td>
+                        <td>Steady blue</td>
+                        <td>The four lower rows. A fixed reference band that never changes, marking the edge itself.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p class="key-reference">
+                Live data from the
+                <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW Open Data Hub</a>
+                (Trip Planner <code>departure_mon</code> and GTFS-realtime Vehicle Positions).
+                Tactile indicator colours follow the concept sketch for this project; the dwell
+                timings are modelled, as no public API reports train door state.
+            </p>
+        </section>
     </div>
 
     <script type="module" src="/static/js/design/11dat/tactile-bumps.js"></script>
