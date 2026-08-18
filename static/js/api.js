@@ -1,6 +1,7 @@
 // master api module - all tfnsw requests go through the flask backend
 
 import * as m1Line from './m1Line.js';
+import * as centralPlatforms from './centralPlatforms.js';
 
 class TfNSWAPI {
     constructor() {
@@ -34,6 +35,23 @@ class TfNSWAPI {
         }
     }
 
+    // live gtfs-realtime vehicle positions, merged across the named feeds
+    // (see VEHICLE_FEEDS in app.py for valid names)
+    async getVehiclePositions(feeds) {
+        const list = Array.isArray(feeds) ? feeds : [feeds];
+        try {
+            const response = await fetch(`${this.backendUrl}/vehicle-positions?feeds=${encodeURIComponent(list.join(','))}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            const data = await response.json();
+            return Array.isArray(data.vehicles) ? data.vehicles : [];
+        } catch (error) {
+            console.error('Error fetching vehicle positions:', error);
+            throw error;
+        }
+    }
+
     // parses a raw tfnsw stopEvents response into a flat departure list
     parseDeparturesRaw(data) {
         const departures = [];
@@ -47,6 +65,10 @@ class TfNSWAPI {
                 line: event.transportation?.number || 'Unknown',
                 destination: event.transportation?.destination?.name || 'Unknown',
                 departureTime: event.departureTimePlanned || event.departureTimeEstimated,
+                // both exposed separately so callers that need the realtime figure
+                // (rather than the timetabled one) can prefer estimated
+                departureTimePlanned: event.departureTimePlanned || null,
+                departureTimeEstimated: event.departureTimeEstimated || null,
                 platform: event.location?.properties?.platform,
                 realtime: event.isRealtimeControlled,
                 delay: event.departureTimeEstimated && event.departureTimePlanned
@@ -90,6 +112,20 @@ class TfNSWAPI {
 
     isM1Station(name) {
         return m1Line.isM1Station(name);
+    }
+
+    // central station platform data lives in centralPlatforms.js - delegated here
+    // for the same reason as m1Line above
+    getCentralPlatform(id) {
+        return centralPlatforms.getPlatform(id);
+    }
+
+    getCentralPlatformGroups() {
+        return centralPlatforms.getPlatformGroups();
+    }
+
+    vehicleMatchesPlatform(vehicle, platform) {
+        return centralPlatforms.matchesPlatform(vehicle, platform);
     }
 
     // categorizes a departure into one of six modes, for the multi-select filter.

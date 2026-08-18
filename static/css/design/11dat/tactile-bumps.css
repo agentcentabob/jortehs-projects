@@ -42,6 +42,31 @@ header h1 {
     text-decoration: underline;
 }
 
+/* platform picker */
+
+.platform-picker {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.platform-picker label {
+    color: var(--l-gray);
+    font-size: 0.9em;
+}
+
+.platform-picker select {
+    background: #0a0a12;
+    color: var(--white);
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.95em;
+    min-width: 260px;
+}
+
 .intro {
     color: var(--l-gray);
     max-width: 900px;
@@ -125,7 +150,6 @@ header h1 {
 .bump-row {
     height: 46px;
     border-radius: 4px;
-    background-color: var(--yellow);
     background-image:
         radial-gradient(circle at 35% 32%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.05) 45%, transparent 60%),
         radial-gradient(circle at center, rgba(0, 0, 0, 0.3) 46%, transparent 48%);
@@ -134,35 +158,32 @@ header h1 {
     transition: background-color 0.35s ease;
 }
 
+/* only the top row responds to train state - the bottom row is the constant
+   blue reference strip from the sketch */
+.row-top {
+    background-color: var(--yellow);
+}
+
 .row-bottom {
     background-color: var(--early);
 }
 
-/* state: before train has arrived */
 .state-idle .row-top {
     background-color: var(--yellow);
     animation: none;
 }
 
-/* state: train arriving, doors closing - flash between bright colours */
 .state-arriving .row-top {
     animation: flash-arrive 0.6s infinite;
 }
 
-/* state: doors opening - flash between bright colours */
 .state-opening .row-top {
     animation: flash-open 0.4s infinite;
 }
 
-/* state: after train has arrived, doors open - settles on green */
 .state-arrived .row-top {
     background-color: var(--ontime);
     animation: none;
-}
-
-.row-bottom {
-    animation: none !important;
-    background-color: var(--early) !important;
 }
 
 @keyframes flash-arrive {
@@ -175,32 +196,83 @@ header h1 {
     50% { background-color: #00FF00; }
 }
 
-/* status + controls */
+/* info box */
 
-.status-panel {
+.info-box {
     margin-top: 20px;
-    text-align: center;
+    background: #16213e;
+    border-radius: 10px;
+    padding: 16px 20px;
 }
 
-.status-label {
-    font-size: 1.4em;
-    font-weight: 600;
+.info-line {
+    color: var(--l-gray);
+    font-size: 1.05em;
+    margin-bottom: 6px;
+}
+
+.info-line strong {
     color: var(--white);
-    min-height: 1.4em;
-    margin-bottom: 14px;
+    font-weight: 600;
 }
 
-.phase-controls,
-.playback-controls {
+.info-status {
+    margin-top: 10px;
+    color: var(--ontime);
+    font-size: 0.95em;
+}
+
+.info-status.error {
+    color: var(--major);
+}
+
+.info-status.demo {
+    color: var(--minor);
+}
+
+/* demo controls */
+
+.demo-panel {
+    margin-top: 16px;
+}
+
+.demo-toggle {
+    background: none;
+    border: none;
+    color: var(--l-gray);
+    font-size: 0.85em;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+}
+
+.demo-toggle:hover {
+    color: var(--white);
+}
+
+.demo-controls {
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: #0a0a12;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+}
+
+.demo-note {
+    color: var(--l-gray);
+    font-size: 0.85em;
+    margin: 0 0 12px;
+}
+
+.phase-controls {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     gap: 10px;
     margin-bottom: 12px;
 }
 
 .phase-btn,
-.playback-controls button {
+.resume-btn {
     background: #16213e;
     color: var(--white);
     border: 1px solid #2a2a3a;
@@ -212,12 +284,16 @@ header h1 {
 }
 
 .phase-btn:hover,
-.playback-controls button:hover {
+.resume-btn:hover {
     background: #223154;
 }
 
 .phase-btn.active {
     background: var(--ontime);
+    border-color: var(--ontime);
+}
+
+.resume-btn {
     border-color: var(--ontime);
 }
 
@@ -228,7 +304,6 @@ header h1 {
     display: flex;
     flex-wrap: wrap;
     gap: 16px 28px;
-    justify-content: center;
     color: var(--l-gray);
     font-size: 0.9em;
     padding-bottom: 20px;

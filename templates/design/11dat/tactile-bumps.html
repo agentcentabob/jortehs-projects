@@ -14,12 +14,16 @@
                 <a href="/" class="back-link">← Back</a>
                 <h1>Digital Tactile Bumps</h1>
             </div>
+            <div class="platform-picker">
+                <label for="platformSelect">Central Station platform</label>
+                <select id="platformSelect"></select>
+            </div>
         </header>
 
         <p class="intro">
-            Concept demo: LED-backed tactile ground surface indicators (TGSIs) that change colour
-            to tell platform users when a train is arriving. This is an animation only for now &mdash;
-            it isn't wired up to live departure data yet.
+            Concept: LED-backed tactile ground surface indicators (TGSIs) that change colour as a
+            train approaches, so the platform edge itself signals what's happening. Driven by live
+            Transport for NSW vehicle position data.
         </p>
 
         <div class="platform-scene">
@@ -39,19 +43,33 @@
             </div>
         </div>
 
-        <div class="status-panel">
-            <div class="status-label" id="statusLabel">Before train has arrived</div>
-
-            <div class="phase-controls" id="phaseControls">
-                <button type="button" class="phase-btn" data-state="idle">Before arrival</button>
-                <button type="button" class="phase-btn" data-state="arriving">Arriving / doors closing</button>
-                <button type="button" class="phase-btn" data-state="opening">Doors opening</button>
-                <button type="button" class="phase-btn" data-state="arrived">Doors open</button>
+        <div class="info-box">
+            <div class="info-line">
+                Displaying information for: <strong id="infoPlatform">—</strong>
             </div>
+            <div class="info-line">
+                Next service: <strong id="infoService">—</strong>
+            </div>
+            <div class="info-status" id="infoStatus">Connecting…</div>
+        </div>
 
-            <div class="playback-controls">
-                <button type="button" id="playPauseBtn">Pause</button>
-                <button type="button" id="restartBtn">Restart</button>
+        <div class="demo-panel">
+            <button type="button" class="demo-toggle" id="demoToggle" aria-expanded="false">
+                Show demo controls
+            </button>
+            <div class="demo-controls" id="demoControls" hidden>
+                <p class="demo-note">
+                    Demo mode overrides the live feed so each phase can be shown on request —
+                    useful when the selected platform is quiet.
+                </p>
+                <div class="phase-controls">
+                    <button type="button" class="phase-btn" data-state="idle">Before arrival</button>
+                    <button type="button" class="phase-btn" data-state="arriving">Arriving / doors closing</button>
+                    <button type="button" class="phase-btn" data-state="opening">Doors opening</button>
+                    <button type="button" class="phase-btn" data-state="arrived">Doors open</button>
+                    <button type="button" class="phase-btn" id="cycleBtn">Auto-cycle</button>
+                </div>
+                <button type="button" class="resume-btn" id="resumeLiveBtn">Return to live data</button>
             </div>
         </div>
 

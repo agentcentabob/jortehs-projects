@@ -1,9 +1,11 @@
 from flask import Flask, render_template, jsonify, request
 import requests
 from datetime import datetime
+import time
 import pytz
 import os
 from dotenv import load_dotenv
+from google.transit import gtfs_realtime_pb2
 
 
 load_dotenv()
@@ -12,6 +14,25 @@ app = Flask(__name__)
 
 API_KEY = os.getenv('TFNSW_API_KEY')
 API_BASE_URL = 'https://api.transport.nsw.gov.au/v1/tp'
+
+# gtfs-realtime vehicle position feeds, keyed by the short name the frontend uses.
+# note the mixed versions: v2 superseded v1 for sydneytrains/metro/innerwest only
+# (v1 404s for those), while cbdandsoutheast and nswtrains still live on v1.
+VEHICLE_FEEDS = {
+    'sydneytrains': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/sydneytrains',
+    'metro': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/metro',
+    'lightrail_innerwest': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/lightrail/innerwest',
+    'lightrail_cbdse': 'https://api.transport.nsw.gov.au/v1/gtfs/vehiclepos/lightrail/cbdandsoutheast',
+    'nswtrains': 'https://api.transport.nsw.gov.au/v1/gtfs/vehiclepos/nswtrains',
+}
+
+# gtfs-realtime VehicleStopStatus enum
+VEHICLE_STOP_STATUS = {0: 'INCOMING_AT', 1: 'STOPPED_AT', 2: 'IN_TRANSIT_TO'}
+
+# feeds refresh every ~10-30s upstream, so a short cache stops platform switching
+# and polling from making redundant calls
+_feed_cache = {}
+FEED_CACHE_SECONDS = 5
 
 
 @app.route("/")
@@ -114,6 +135,68 @@ def get_stops():
 
     except requests.exceptions.RequestException as e:
         return jsonify({'error': str(e)}), 500
+
+
+def fetch_feed(feed_name):
+    """fetches and decodes one gtfs-realtime vehicle position feed into plain dicts"""
+    cached = _feed_cache.get(feed_name)
+    if cached and time.time() - cached['at'] < FEED_CACHE_SECONDS:
+        return cached['vehicles']
+
+    response = requests.get(
+        VEHICLE_FEEDS[feed_name],
+        headers={'Authorization': f'apikey {API_KEY}'},
+        timeout=20
+    )
+    response.raise_for_status()
+
+    feed = gtfs_realtime_pb2.FeedMessage()
+    feed.ParseFromString(response.content)
+
+    vehicles = []
+    for entity in feed.entity:
+        if not entity.HasField('vehicle'):
+            continue
+        v = entity.vehicle
+        vehicles.append({
+            'feed': feed_name,
+            # numeric gtfs stop id on metro/lightrail/nswtrains, but a signal berth
+            # string like "Sydney.Central 17 Loc" on sydneytrains - see CLAUDE.md
+            'stopId': v.stop_id if v.HasField('stop_id') else None,
+            # only populated on metro/lightrail/nswtrains, never on sydneytrains
+            'status': VEHICLE_STOP_STATUS.get(v.current_status) if v.HasField('current_status') else None,
+            'routeId': v.trip.route_id if v.HasField('trip') else None,
+            'tripId': v.trip.trip_id if v.HasField('trip') else None,
+            'lat': v.position.latitude if v.HasField('position') else None,
+            'lon': v.position.longitude if v.HasField('position') else None,
+            'timestamp': v.timestamp if v.HasField('timestamp') else None,
+        })
+
+    _feed_cache[feed_name] = {'at': time.time(), 'vehicles': vehicles}
+    return vehicles
+
+
+@app.route('/api/vehicle-positions', methods=['GET'])
+def get_vehicle_positions():
+    """live vehicle positions, merged across one or more comma-separated feeds"""
+    requested = [f.strip() for f in request.args.get('feeds', '').split(',') if f.strip()]
+    if not requested:
+        return jsonify({'error': 'feeds is required', 'available': list(VEHICLE_FEEDS)}), 400
+
+    unknown = [f for f in requested if f not in VEHICLE_FEEDS]
+    if unknown:
+        return jsonify({'error': f'unknown feeds: {unknown}', 'available': list(VEHICLE_FEEDS)}), 400
+
+    vehicles = []
+    errors = {}
+    for feed_name in requested:
+        try:
+            vehicles.extend(fetch_feed(feed_name))
+        except requests.exceptions.RequestException as e:
+            # one dead feed shouldn't blank the whole board
+            errors[feed_name] = str(e)
+
+    return jsonify({'vehicles': vehicles, 'errors': errors})
 
 
 @app.route('/api/health', methods=['GET'])
