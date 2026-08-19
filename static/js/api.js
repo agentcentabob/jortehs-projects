@@ -134,6 +134,52 @@ class TfNSWAPI {
         return centralPlatforms.matchesPlatform(vehicle, platform);
     }
 
+    vehicleIsAtAnotherStation(vehicle, platform) {
+        return centralPlatforms.isAtAnotherStation(vehicle, platform);
+    }
+
+    getCentralStationBounds() {
+        return centralPlatforms.getStationBounds();
+    }
+
+    // Sydney Trains route ids are internal SECTOR codes rather than line codes.
+    // This mapping was derived by tallying each sector against the destinations in
+    // the feed's own vehicle labels (APS -> Campbelltown/Macarthur/Revesby = T8,
+    // WST -> Penrith/Richmond/Emu Plains = T1, and so on). It is inferred from live
+    // data, NOT published by TfNSW - re-check it if the timetable changes.
+    // CTY (Brisbane/Canberra/Perth) and RTTA (non-timetabled) intentionally have no
+    // line and stay unlabelled.
+    static SECTOR_LINES = {
+        APS: 'T8', ESI: 'T4', NSN: 'T1', NTH: 'T9', WST: 'T1',
+        CMB: 'T5', OLY: 'T7', IWL: 'T2',
+        BMT: 'BMT', CCN: 'CCN', SCO: 'SCO', SHL: 'SHL', HUN: 'HUN'
+    };
+
+    // pulls a line code out of a vehicle feed route_id. metro and light rail encode
+    // it cleanly (SMNW_M1, 1001_L2, IWLR-191); heavy rail goes through SECTOR_LINES.
+    // `label` is the feed's trip description and is only used to split the one
+    // genuinely ambiguous sector.
+    getLineCodeFromRouteId(routeId, label) {
+        const id = String(routeId || '').toUpperCase();
+        if (!id) return null;
+        if (id.includes('IWLR')) return 'L1';
+
+        // split on separators - "1001_L2" has no word boundary before the L
+        const tokens = id.split(/[^A-Z0-9]+/).filter(Boolean);
+        const explicit = tokens.find(t =>
+            /^T[1-9]$/.test(t) || /^M[1-9]$/.test(t) || /^L[1-4]$/.test(t));
+        if (explicit) return explicit;
+
+        const sector = tokens.find(t => t in TfNSWAPI.SECTOR_LINES);
+        if (!sector) return null;
+
+        // IWL is the only sector serving two lines - its Bankstown workings are T3,
+        // everything else (Leppington, Parramatta) is T2
+        if (sector === 'IWL' && /bankstown/i.test(label || '')) return 'T3';
+
+        return TfNSWAPI.SECTOR_LINES[sector];
+    }
+
     // categorizes a departure into one of six modes, for the multi-select filter.
     // product.class alone is ambiguous (suburban/intercity trains share class 1),
     // so this reads product name first and only falls back to the line prefix
@@ -213,6 +259,8 @@ class TfNSWAPI {
             // M1 must be listed explicitly - the short code alone doesn't contain
             // "metro", so it would otherwise fall through to the default colour
             M1: '--metro',
+            // intercity lines are branded as the suburban line they share track with
+            BMT: '--t1', CCN: '--t9', SCO: '--t4', SHL: '--t8',
             Metro: '--metro', SydneyTrains: '--sydneytrains', NSWTL: '--nswtl',
             Bus: '--bus', LightRail: '--lightrail', Ferry: '--ferry'
         };

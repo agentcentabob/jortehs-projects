@@ -76,9 +76,9 @@ header h1 {
     min-width: 260px;
 }
 
+/* no max-width - these should only wrap at the page edge */
 .intro {
     color: var(--l-gray);
-    max-width: 900px;
     line-height: 1.5;
     margin: 0 0 24px;
 }
@@ -88,60 +88,41 @@ header h1 {
 .platform-scene {
     background: #0a0a12;
     border: 1px solid #2a2a3a;
-    border-radius: 10px;
-    padding: 20px 20px 0;
+    border-radius: 8px;
+    padding: 0 20px;
     overflow: hidden;
 }
 
-.tracks-label {
-    text-align: right;
-    color: var(--l-gray);
-    font-size: 0.85em;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-}
-
-.tracks {
-    display: flex;
-    flex-direction: column;
-    gap: 34px;
-    padding: 10px 0 20px;
-}
-
-.rail {
+/* open track void above the edge - no rails drawn, the focus is the platform */
+.trackside {
     position: relative;
-    height: 2px;
-    background: #555;
+    height: 150px;
+    margin: 0 -20px;
+    background: linear-gradient(to bottom, #05070d, #10141f);
 }
 
-.rail::before {
-    content: "";
+.trackside-label {
     position: absolute;
-    inset: -16px 0;
-    background-image: repeating-linear-gradient(
-        to right,
-        #333,
-        #333 2px,
-        transparent 2px,
-        transparent 60px
-    );
-    background-position: center;
-    pointer-events: none;
+    right: 20px;
+    top: 10px;
+    color: #4a4a5a;
+    font-size: 0.8em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
-/* no bottom margin - the concrete surface below must butt straight up against
-   the edge so the grey is unbroken from here to the base of the scene */
+/* negative margins so the edge line runs the full width of the scene box, and no
+   bottom margin so the concrete below butts straight up against it */
 .platform-edge {
     position: relative;
     border-top: 3px solid #ccc;
     border-bottom: 1px solid #666;
-    margin-bottom: 0;
+    margin: 0 -20px;
 }
 
 .platform-edge-label {
     position: absolute;
-    left: 0;
+    left: 20px;
     top: -22px;
     color: var(--l-gray);
     font-size: 0.85em;
@@ -157,9 +138,20 @@ header h1 {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    background: #b4b4ad;
     margin: 0 -20px;
-    padding: 14px 20px 26px;
+    /* bumps sit at the bottom of the box, set back from the platform edge by a
+       run of bare concrete, the way a real tactile strip is inset */
+    padding: 76px 20px 18px;
+    /* large slab joints, sized independently of the LED spacing so the concrete
+       reads as paving rather than as a grid drawn around every light */
+    background-color: #b4b4ad;
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.28) 1px, transparent 1px),
+        linear-gradient(to right, rgba(90, 90, 84, 0.3) 2px, transparent 2px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.22) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(90, 90, 84, 0.25) 2px, transparent 2px);
+    background-size: 168px 100%, 168px 100%, 100% 132px, 100% 132px;
+    background-position: 1px 0, 0 0, 0 1px, 0 0;
 }
 
 /* LED lenses set into the concrete. no per-dot elements - the whole row is one
@@ -195,9 +187,15 @@ header h1 {
     animation: none;
 }
 
+/* arriving and departing share one alert flash - the info box and key name which
+   of the two it currently is. closing has its own red/yellow pair. */
 .state-arriving .row-top,
-.state-closing .row-top {
+.state-departing .row-top {
     animation: flash-alert 0.7s step-end infinite;
+}
+
+.state-closing .row-top {
+    animation: flash-closing 0.7s step-end infinite;
 }
 
 .state-opening .row-top {
@@ -218,6 +216,12 @@ header h1 {
     100% { --led: #FF1717; }
 }
 
+@keyframes flash-closing {
+    0% { --led: #FF1717; }
+    50% { --led: #FFE000; }
+    100% { --led: #FF1717; }
+}
+
 @keyframes flash-open {
     0% { --led: #35DC4F; }
     50% { --led: #0096FF; }
@@ -226,17 +230,67 @@ header h1 {
 
 /* info box */
 
-.info-box {
-    margin-top: 20px;
-    background: #16213e;
-    border-radius: 10px;
-    padding: 16px 20px;
+/* two columns at roughly 2:1 - the display sits top-left with its details beside
+   it, the key below the display and the map below the details */
+.board-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 22px;
+    align-items: stretch;
+    margin-top: 22px;
 }
 
+@media (max-width: 1100px) {
+    .board-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* every panel on the page is the same kind of titled tile */
+.tile {
+    display: flex;
+    flex-direction: column;
+    background: #10182c;
+    border: 1px solid #22304f;
+    border-radius: 10px;
+    padding: 18px 20px;
+}
+
+.tile-title {
+    color: var(--white);
+    font-size: 1.15em;
+    margin: 0 0 14px;
+}
+
+.info-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1;
+    gap: 4px;
+}
+
+/* value sits below its heading rather than beside it, so long service names have
+   the full tile width and every row reads the same way */
 .info-line {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 1.2em;
+    padding: 12px 0;
+    border-bottom: 1px solid #22304f;
+}
+
+.info-line:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.info-label {
     color: var(--l-gray);
-    font-size: 1.05em;
-    margin-bottom: 6px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }
 
 .info-line strong {
@@ -261,101 +315,80 @@ header h1 {
 }
 
 #infoStatus.demo {
-    color: var(--minor);
+    color: var(--bus);
 }
 
 /* demo controls */
 
-/* deliberately understated and tucked to one side - it's a presentation aid,
-   not part of the design being demonstrated */
-.demo-panel {
-    margin-top: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
+/* map */
 
-.demo-toggle {
-    background: none;
-    border: none;
-    color: #6a6a7a;
-    font-size: 0.8em;
-    cursor: pointer;
-    padding: 4px 2px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.demo-toggle::before {
-    content: "\2699";
-    font-size: 1.1em;
-    line-height: 1;
-}
-
-.demo-toggle:hover {
+.map-intro {
     color: var(--l-gray);
+    font-size: 0.9em;
+    margin: 0 0 14px;
 }
 
-.demo-controls {
-    margin-top: 12px;
-    width: 100%;
-    padding: 14px 16px;
-    background: #0a0a12;
+.map-frame {
+    flex: 1;
     border: 1px solid #2a2a3a;
     border-radius: 8px;
+    overflow: hidden;
+    line-height: 0;
 }
 
-.demo-note {
-    color: var(--l-gray);
-    font-size: 0.85em;
-    margin: 0 0 12px;
-}
-
-.phase-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 12px;
-}
-
-.phase-btn,
-.resume-btn {
-    background: #16213e;
-    color: var(--white);
-    border: 1px solid #2a2a3a;
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 0.9em;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.phase-btn:hover,
-.resume-btn:hover {
-    background: #223154;
-}
-
-.phase-btn.active {
-    background: var(--ontime);
-    border-color: var(--ontime);
-}
-
-.resume-btn {
-    border-color: var(--ontime);
+#trainMap {
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+    display: block;
 }
 
 /* key */
 
-.key {
-    margin-top: 32px;
-    padding-bottom: 40px;
+
+.key-demo-col {
+    width: 58px;
+    text-align: right;
 }
 
-.key-title {
+.key-demo-btn {
+    background: #16213e;
     color: var(--white);
-    font-size: 1.2em;
-    margin: 0 0 6px;
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    width: 34px;
+    height: 28px;
+    font-size: 0.8em;
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* play on every control, pause on whichever state is currently showing */
+.key-demo-btn::before {
+    content: "\25B6";
+}
+
+.key-demo-btn:hover {
+    background: #223154;
+}
+
+/* .active = this is the state on screen right now, whether live or held. muted
+   so it reads as "currently showing" rather than as a button to press. */
+.key-demo-btn.active {
+    background: var(--bus);
+    border-color: var(--bus);
+    color: #04121c;
+    opacity: 0.55;
+}
+
+.key-demo-btn.active::before {
+    content: "\275A\275A";
+    letter-spacing: 1px;
+}
+
+/* held by the user rather than following live data - same shape, less muted */
+.key-demo-btn.forced {
+    opacity: 0.9;
 }
 
 .key-intro {
@@ -421,14 +454,16 @@ header h1 {
 .led-arrived { --led: #35DC4F; }
 .led-constant { --led: var(--early); }
 .led-alert { animation: flash-alert 0.7s step-end infinite; }
+.led-closing { animation: flash-closing 0.7s step-end infinite; }
 .led-open { animation: flash-open 0.5s step-end infinite; }
 
+/* no max-width - should only wrap at the page edge, same as .intro */
 .key-reference {
-    margin: 18px 0 0;
+    margin: 22px 0 0;
+    padding-bottom: 40px;
     color: var(--l-gray);
     font-size: 0.85em;
     line-height: 1.6;
-    max-width: 900px;
 }
 
 .key-reference a {

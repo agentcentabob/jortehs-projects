@@ -22,123 +22,141 @@
 
         <p class="intro">
             Concept: LED-backed tactile ground surface indicators (TGSIs) that change colour as a
-            train approaches, so the platform edge itself signals what's happening. Driven by live
+            vehicle approaches, so the platform edge itself signals what's happening. Driven by live
             Transport for NSW vehicle position data.
         </p>
 
-        <div class="platform-scene">
-            <div class="tracks-label">tracks</div>
-            <div class="tracks">
-                <div class="rail"></div>
-                <div class="rail"></div>
-            </div>
+        <div class="board-layout">
+            <section class="tile tile-scene">
+                <h2 class="tile-title">Platform edge display</h2>
+                <div class="platform-scene">
+                    <div class="trackside">
+                        <span class="trackside-label">track</span>
+                    </div>
 
-            <div class="platform-edge">
-                <span class="platform-edge-label">platform edge</span>
-            </div>
+                    <div class="platform-edge">
+                        <span class="platform-edge-label">platform edge</span>
+                    </div>
 
-            <div class="tactile-strip state-idle" id="tactileStrip">
-                <div class="bump-row row-top"></div>
-                <div class="bump-row row-top"></div>
-                <div class="bump-row row-bottom"></div>
-                <div class="bump-row row-bottom"></div>
-                <div class="bump-row row-bottom"></div>
-                <div class="bump-row row-bottom"></div>
-            </div>
-        </div>
-
-        <div class="info-box">
-            <div class="info-line">
-                Displaying information for: <strong id="infoPlatform">—</strong>
-            </div>
-            <div class="info-line">
-                Next service: <strong id="infoService">—</strong>
-            </div>
-            <div class="info-line">
-                Train status: <strong id="infoStatus">Connecting…</strong>
-            </div>
-            <div class="info-line">
-                Indicator showing: <strong id="infoLights">—</strong>
-            </div>
-        </div>
-
-        <div class="demo-panel">
-            <button type="button" class="demo-toggle" id="demoToggle" aria-expanded="false">
-                <span class="demo-toggle-text">Demo controls</span>
-            </button>
-            <div class="demo-controls" id="demoControls" hidden>
-                <p class="demo-note">
-                    Demo mode overrides the live feed so each phase can be shown on request —
-                    useful when the selected platform is quiet.
-                </p>
-                <div class="phase-controls">
-                    <button type="button" class="phase-btn" data-state="idle">Before arrival</button>
-                    <button type="button" class="phase-btn" data-state="arriving">Arriving</button>
-                    <button type="button" class="phase-btn" data-state="opening">Doors opening</button>
-                    <button type="button" class="phase-btn" data-state="arrived">Doors open</button>
-                    <button type="button" class="phase-btn" data-state="closing">Doors closing</button>
-                    <button type="button" class="phase-btn" id="cycleBtn">Auto-cycle</button>
+                    <div class="tactile-strip state-idle" id="tactileStrip">
+                        <div class="bump-row row-top"></div>
+                        <div class="bump-row row-top"></div>
+                        <div class="bump-row row-bottom"></div>
+                        <div class="bump-row row-bottom"></div>
+                        <div class="bump-row row-bottom"></div>
+                        <div class="bump-row row-bottom"></div>
+                    </div>
                 </div>
-                <button type="button" class="resume-btn" id="resumeLiveBtn">Return to live data</button>
-            </div>
+            </section>
+
+            <section class="tile tile-info">
+                <h2 class="tile-title">Service information</h2>
+                <div class="info-box">
+                    <div class="info-line">
+                        <span class="info-label">Displaying information for</span>
+                        <strong id="infoPlatform">...</strong>
+                    </div>
+                    <div class="info-line">
+                        <span class="info-label">Next service</span>
+                        <strong id="infoService">...</strong>
+                    </div>
+                    <div class="info-line">
+                        <span class="info-label">Vehicle status</span>
+                        <strong id="infoStatus">Connecting...</strong>
+                    </div>
+                    <div class="info-line">
+                        <span class="info-label">Indicator showing</span>
+                        <strong id="infoLights">...</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tile key" id="keySection">
+                <h2 class="tile-title">Key</h2>
+                <p class="key-intro">
+                    What each colour on the platform edge means, in the order a passenger sees them.
+                    The muted control marks the state currently showing; press any control to hold
+                    that state, and press it again to return to live data.
+                </p>
+
+                <table class="key-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Indicator</th>
+                            <th scope="col">State</th>
+                            <th scope="col">Meaning</th>
+                            <th scope="col" class="key-demo-col">Controls</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="key-led led-idle"></span></td>
+                            <td>Steady yellow</td>
+                            <td>No vehicle at the platform. Standard tactile indicator colour.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="idle" aria-label="Hold the 'no vehicle' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-alert"></span></td>
+                            <td>Flashing red / orange</td>
+                            <td>Vehicle arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="arriving" aria-label="Hold the 'vehicle arriving' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-open"></span></td>
+                            <td>Flashing green / blue</td>
+                            <td>Doors opening. Runs for about 5 seconds.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="opening" aria-label="Hold the 'doors opening' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-arrived"></span></td>
+                            <td>Steady green</td>
+                            <td>Doors open, safe to board.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="arrived" aria-label="Hold the 'doors open' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-closing"></span></td>
+                            <td>Flashing red / yellow</td>
+                            <td>Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure, whichever is later, then runs for 5 seconds.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="closing" aria-label="Hold the 'doors closing' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-alert"></span></td>
+                            <td>Flashing red / orange</td>
+                            <td>Vehicle departing. Shares the arriving pattern. Runs from the moment the doors finish closing until it is seen at its next stop.</td>
+                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="departing" aria-label="Hold the 'vehicle departing' state"></button></td>
+                        </tr>
+                        <tr>
+                            <td><span class="key-led led-constant"></span></td>
+                            <td>Steady blue</td>
+                            <td>The four lower rows. A fixed reference band that never changes, marking the edge itself.</td>
+                            <td class="key-demo-col"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="tile map-section">
+                <h2 class="tile-title">Live vehicle positions</h2>
+                <p class="map-intro" id="mapIntro">
+                    Vehicles currently reported on this platform's feed, plotted by GPS position.
+                </p>
+                <div class="map-frame">
+                    <svg id="trainMap" viewBox="0 0 700 780" preserveAspectRatio="xMidYMid slice"
+                         role="img" aria-label="Map of live vehicle positions around Central Station"></svg>
+                </div>
+            </section>
         </div>
 
-        <section class="key">
-            <h2 class="key-title">Key</h2>
-            <p class="key-intro">
-                What each colour on the platform edge means, in the order a passenger sees them.
-            </p>
-
-            <table class="key-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Indicator</th>
-                        <th scope="col">State</th>
-                        <th scope="col">Meaning</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><span class="key-led led-idle"></span></td>
-                        <td>Steady yellow</td>
-                        <td>No train at the platform. Standard tactile indicator colour.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="key-led led-alert"></span></td>
-                        <td>Flashing red / orange</td>
-                        <td>Train arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="key-led led-open"></span></td>
-                        <td>Flashing green / blue</td>
-                        <td>Doors opening. Runs for about 5 seconds.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="key-led led-arrived"></span></td>
-                        <td>Steady green</td>
-                        <td>Doors open, safe to board.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="key-led led-alert"></span></td>
-                        <td>Flashing red / orange</td>
-                        <td>Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure — whichever is later.</td>
-                    </tr>
-                    <tr>
-                        <td><span class="key-led led-constant"></span></td>
-                        <td>Steady blue</td>
-                        <td>The four lower rows. A fixed reference band that never changes, marking the edge itself.</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p class="key-reference">
-                Live data from the
-                <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW Open Data Hub</a>
-                (Trip Planner <code>departure_mon</code> and GTFS-realtime Vehicle Positions).
-                Tactile indicator colours follow the concept sketch for this project; the dwell
-                timings are modelled, as no public API reports train door state.
-            </p>
-        </section>
+        <p class="key-reference">
+            Live data from the
+            <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW Open Data Hub</a>
+            (Trip Planner <code>departure_mon</code> and GTFS-realtime Vehicle Positions).
+            Map imagery &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
+            Line codes are shown only where the feed names one; most Sydney Trains services report an
+            internal sector code instead, and appear as plain markers.
+            Tactile indicator colours follow the concept sketch for this project; the dwell
+            timings are modelled, as no public API reports vehicle door state.
+        </p>
     </div>
 
     <script type="module" src="/static/js/design/11dat/tactile-bumps.js"></script>

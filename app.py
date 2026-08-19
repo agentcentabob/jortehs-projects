@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import requests
 from datetime import datetime
 import time
@@ -33,6 +33,15 @@ VEHICLE_STOP_STATUS = {0: 'INCOMING_AT', 1: 'STOPPED_AT', 2: 'IN_TRANSIT_TO'}
 # and polling from making redundant calls
 _feed_cache = {}
 FEED_CACHE_SECONDS = 5
+
+# OSM map tiles are proxied through here rather than fetched by the browser, so the
+# project keeps its "everything goes through the Flask backend" shape and no CDN or
+# JS mapping library is needed. OSM's tile usage policy requires an identifying
+# User-Agent and discourages heavy traffic, hence the cache.
+OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+OSM_USER_AGENT = 'virtualdpb-tfnsw/1.0 (student project; local use)'
+_tile_cache = {}
+TILE_CACHE_MAX = 500
 
 
 @app.route("/")
@@ -167,6 +176,11 @@ def fetch_feed(feed_name):
             'status': VEHICLE_STOP_STATUS.get(v.current_status) if v.HasField('current_status') else None,
             'routeId': v.trip.route_id if v.HasField('trip') else None,
             'tripId': v.trip.trip_id if v.HasField('trip') else None,
+            # used to follow one train from a platform to its next stop
+            'vehicleId': v.vehicle.id if v.HasField('vehicle') else None,
+            # human-readable trip description, e.g. "17:14 Central Station to
+            # Leppington Station". The only place the feed names a destination.
+            'label': v.vehicle.label if v.HasField('vehicle') else None,
             'lat': v.position.latitude if v.HasField('position') else None,
             'lon': v.position.longitude if v.HasField('position') else None,
             'timestamp': v.timestamp if v.HasField('timestamp') else None,
@@ -197,6 +211,47 @@ def get_vehicle_positions():
             errors[feed_name] = str(e)
 
     return jsonify({'vehicles': vehicles, 'errors': errors})
+
+
+@app.route('/api/map-tile', methods=['GET'])
+def map_tile():
+    """proxies a single OpenStreetMap raster tile, cached in memory"""
+    try:
+        z = int(request.args.get('z', ''))
+        x = int(request.args.get('x', ''))
+        y = int(request.args.get('y', ''))
+    except ValueError:
+        return jsonify({'error': 'z, x and y must be integers'}), 400
+
+    if not 0 <= z <= 19:
+        return jsonify({'error': 'z out of range'}), 400
+
+    span = 2 ** z
+    if not (0 <= x < span and 0 <= y < span):
+        return jsonify({'error': 'tile coordinates out of range'}), 400
+
+    key = (z, x, y)
+    if key not in _tile_cache:
+        try:
+            response = requests.get(
+                OSM_TILE_URL.format(z=z, x=x, y=y),
+                headers={'User-Agent': OSM_USER_AGENT},
+                timeout=15
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            return jsonify({'error': str(e)}), 502
+
+        # crude but bounded - tiles are small and the viewport rarely moves
+        if len(_tile_cache) >= TILE_CACHE_MAX:
+            _tile_cache.clear()
+        _tile_cache[key] = response.content
+
+    return Response(
+        _tile_cache[key],
+        mimetype='image/png',
+        headers={'Cache-Control': 'public, max-age=86400'}
+    )
 
 
 @app.route('/api/health', methods=['GET'])
