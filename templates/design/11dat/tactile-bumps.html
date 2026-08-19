@@ -21,9 +21,8 @@
         </header>
 
         <p class="intro">
-            Concept: LED-backed tactile ground surface indicators (TGSIs) that change colour as a
-            vehicle approaches, so the platform edge itself signals what's happening. Driven by live
-            Transport for NSW vehicle position data.
+            LED-backed tactile ground surface indicators that change colour relative to the next service, improving accessibility and safety for all users.
+            Driven by live Transport for NSW vehicle position data.
         </p>
 
         <div class="board-layout">
@@ -74,9 +73,9 @@
             <section class="tile key" id="keySection">
                 <h2 class="tile-title">Key</h2>
                 <p class="key-intro">
-                    What each colour on the platform edge means, in the order a passenger sees them.
-                    The muted control marks the state currently showing; press any control to hold
-                    that state, and press it again to return to live data.
+                    The simple logic behind each colour and pattern shown on the tactile bumps.
+                    The muted control marks the state currently showing: select any control to hold
+                    that state, and select it again to return to live data.
                 </p>
 
                 <table class="key-table">
@@ -152,10 +151,7 @@
             <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW Open Data Hub</a>
             (Trip Planner <code>departure_mon</code> and GTFS-realtime Vehicle Positions).
             Map imagery &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
-            Line codes are shown only where the feed names one; most Sydney Trains services report an
-            internal sector code instead, and appear as plain markers.
-            Tactile indicator colours follow the concept sketch for this project; the dwell
-            timings are modelled, as no public API reports vehicle door state.
+            <br>Some data derived, including vehicle door state (lack of API reporting) and line numbers (complexity of request).
         </p>
     </div>
 
