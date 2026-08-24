@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify, request, Response
 import requests
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 import time
 import pytz
 import os
@@ -183,6 +184,9 @@ def fetch_feed(feed_name):
             'label': v.vehicle.label if v.HasField('vehicle') else None,
             'lat': v.position.latitude if v.HasField('position') else None,
             'lon': v.position.longitude if v.HasField('position') else None,
+            # direction of travel in degrees. metro and light rail always send this,
+            # sydneytrains never does.
+            'bearing': v.position.bearing if v.HasField('position') and v.position.HasField('bearing') else None,
             'timestamp': v.timestamp if v.HasField('timestamp') else None,
         })
 
@@ -203,19 +207,25 @@ def get_vehicle_positions():
 
     vehicles = []
     errors = {}
-    for feed_name in requested:
-        try:
-            vehicles.extend(fetch_feed(feed_name))
-        except requests.exceptions.RequestException as e:
-            # one dead feed shouldn't blank the whole board
-            errors[feed_name] = str(e)
+
+    # fetched in parallel - going one at a time took ~3s for all five feeds, which
+    # is longer than the gap between polls on the tactile bumps board
+    with ThreadPoolExecutor(max_workers=len(requested)) as pool:
+        futures = {pool.submit(fetch_feed, name): name for name in requested}
+        for future in futures:
+            feed_name = futures[future]
+            try:
+                vehicles.extend(future.result())
+            except requests.exceptions.RequestException as e:
+                # one dead feed shouldn't blank the whole board
+                errors[feed_name] = str(e)
 
     return jsonify({'vehicles': vehicles, 'errors': errors})
 
 
 @app.route('/api/map-tile', methods=['GET'])
 def map_tile():
-    """proxies a single OpenStreetMap raster tile, cached in memory"""
+    # proxies a single OpenStreetMap raster tile, cached in memory
     try:
         z = int(request.args.get('z', ''))
         x = int(request.args.get('x', ''))

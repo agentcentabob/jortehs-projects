@@ -168,13 +168,22 @@ export function getStationBounds() {
     };
 }
 
-// matches "Sydney.Central 17 Loc" / "Sydenham.Central 24 Loc" but deliberately not
-// "CentralCoast.Gosford 2 Loc" - the berth number must directly follow "Central"
-const BERTH_PATTERN = /Central (\d+) Loc$/;
+// Central's terminal platforms (1-15) are officially called Sydney Terminal, so the
+// feed names their berths "Sydney 12 Loc" rather than "Central 12 Loc". Platforms
+// 16-27 use "Central 17 Loc". Both are the same station, so we have to accept both
+// names or platforms 1-15 never register a train at all.
+const BERTH_PATTERN = /(Central|Sydney) (\d+) Loc$/;
+const SYDNEY_TERMINAL_MAX_PLATFORM = 15;
 
 export function getBerthPlatformNumber(stopId) {
     const match = BERTH_PATTERN.exec(stopId || '');
-    return match ? parseInt(match[1], 10) : null;
+    if (!match) return null;
+
+    const number = parseInt(match[2], 10);
+    // "Sydney" only ever means the terminal platforms, so a high number under that
+    // name isn't one of ours
+    if (match[1] === 'Sydney' && number > SYDNEY_TERMINAL_MAX_PLATFORM) return null;
+    return number;
 }
 
 // sydneytrains berths that sit at a platform are named "<Area>.<Station> <n> Loc"
@@ -188,6 +197,9 @@ export function getBerthStation(stopId) {
     return match ? match[1].trim() : null;
 }
 
+// both of these berth station names mean Central (see BERTH_PATTERN above)
+const CENTRAL_BERTH_NAMES = ['central', 'sydney'];
+
 // true if this vehicle is reported at a platform of some station other than Central
 export function isAtAnotherStation(vehicle, platform) {
     if (!vehicle) return false;
@@ -198,7 +210,7 @@ export function isAtAnotherStation(vehicle, platform) {
     }
 
     const station = getBerthStation(vehicle.stopId);
-    return Boolean(station) && station.toLowerCase() !== 'central';
+    return Boolean(station) && !CENTRAL_BERTH_NAMES.includes(station.toLowerCase());
 }
 
 // true if this vehicle is sitting at (or arriving into) the given platform.

@@ -14,10 +14,6 @@
                 <a href="/" class="back-link">← Back</a>
                 <h1>Digital Tactile Bumps</h1>
             </div>
-            <div class="platform-picker">
-                <label for="platformSelect">Central Station platform</label>
-                <select id="platformSelect"></select>
-            </div>
         </header>
 
         <p class="intro">
@@ -48,28 +44,6 @@
                 </div>
             </section>
 
-            <section class="tile tile-info">
-                <h2 class="tile-title">Service information</h2>
-                <div class="info-box">
-                    <div class="info-line">
-                        <span class="info-label">Displaying information for</span>
-                        <strong id="infoPlatform">...</strong>
-                    </div>
-                    <div class="info-line">
-                        <span class="info-label">Next service</span>
-                        <strong id="infoService">...</strong>
-                    </div>
-                    <div class="info-line">
-                        <span class="info-label">Vehicle status</span>
-                        <strong id="infoStatus">Connecting...</strong>
-                    </div>
-                    <div class="info-line">
-                        <span class="info-label">Indicator showing</span>
-                        <strong id="infoLights">...</strong>
-                    </div>
-                </div>
-            </section>
-
             <section class="tile key" id="keySection">
                 <h2 class="tile-title">Key</h2>
                 <p class="key-intro">
@@ -78,60 +52,84 @@
                     that state, and select it again to return to live data.
                 </p>
 
-                <table class="key-table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Indicator</th>
-                            <th scope="col">State</th>
-                            <th scope="col">Meaning</th>
-                            <th scope="col" class="key-demo-col">Controls</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><span class="key-led led-idle"></span></td>
-                            <td>Steady yellow</td>
-                            <td>No vehicle at the platform. Standard tactile indicator colour.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="idle" aria-label="Hold the 'no vehicle' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-alert"></span></td>
-                            <td>Flashing red / orange</td>
-                            <td>Vehicle arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="arriving" aria-label="Hold the 'vehicle arriving' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-open"></span></td>
-                            <td>Flashing green / blue</td>
-                            <td>Doors opening. Runs for about 5 seconds.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="opening" aria-label="Hold the 'doors opening' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-arrived"></span></td>
-                            <td>Steady green</td>
-                            <td>Doors open, safe to board.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="arrived" aria-label="Hold the 'doors open' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-closing"></span></td>
-                            <td>Flashing red / yellow</td>
-                            <td>Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure, whichever is later, then runs for 5 seconds.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="closing" aria-label="Hold the 'doors closing' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-alert"></span></td>
-                            <td>Flashing red / orange</td>
-                            <td>Vehicle departing. Shares the arriving pattern. Runs from the moment the doors finish closing until it is seen at its next stop.</td>
-                            <td class="key-demo-col"><button type="button" class="key-demo-btn" data-state="departing" aria-label="Hold the 'vehicle departing' state"></button></td>
-                        </tr>
-                        <tr>
-                            <td><span class="key-led led-constant"></span></td>
-                            <td>Steady blue</td>
-                            <td>The four lower rows. A fixed reference band that never changes, marking the edge itself.</td>
-                            <td class="key-demo-col"></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <ul class="key-list">
+                    <li class="key-item">
+                        <span class="key-led led-idle"></span>
+                        <span class="key-state">Steady yellow</span>
+                        <button type="button" class="key-demo-btn" data-state="idle" aria-label="Hold the 'no vehicle' state"></button>
+                        <p class="key-meaning">No vehicle at the platform. Standard tactile indicator colour.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-alert"></span>
+                        <span class="key-state">Flashing red / orange</span>
+                        <button type="button" class="key-demo-btn" data-state="arriving" aria-label="Hold the 'vehicle arriving' state"></button>
+                        <p class="key-meaning">Vehicle arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-open"></span>
+                        <span class="key-state">Flashing green / blue</span>
+                        <button type="button" class="key-demo-btn" data-state="opening" aria-label="Hold the 'doors opening' state"></button>
+                        <p class="key-meaning">Doors opening. Runs for about 5 seconds.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-arrived"></span>
+                        <span class="key-state">Steady green</span>
+                        <button type="button" class="key-demo-btn" data-state="arrived" aria-label="Hold the 'doors open' state"></button>
+                        <p class="key-meaning">Doors open, safe to board.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-closing"></span>
+                        <span class="key-state">Flashing red / yellow</span>
+                        <button type="button" class="key-demo-btn" data-state="closing" aria-label="Hold the 'doors closing' state"></button>
+                        <p class="key-meaning">Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure, whichever is later, then runs for 5 seconds.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-alert"></span>
+                        <span class="key-state">Flashing red / orange</span>
+                        <button type="button" class="key-demo-btn" data-state="departing" aria-label="Hold the 'vehicle departing' state"></button>
+                        <p class="key-meaning">Vehicle departing. Shares the arriving pattern. Runs from the moment the doors finish closing until it is seen at its next stop.</p>
+                    </li>
+                    <li class="key-item">
+                        <span class="key-led led-constant"></span>
+                        <span class="key-state">Steady blue</span>
+                        <span class="key-demo-spacer"></span>
+                        <p class="key-meaning">The four lower rows. A fixed reference band that never changes, marking the edge itself.</p>
+                    </li>
+                </ul>
+            </section>
+
+            <section class="tile tile-info">
+                <div class="info-bar">
+                    <div class="info-cell info-cell-platform">
+                        <label class="info-label" for="platformSelect">Central Station platform</label>
+                        <div class="platform-row">
+                            <select id="platformSelect"></select>
+                            <button type="button" id="refreshBtn" class="refresh-btn"
+                                    title="Fetch the latest departures and vehicle positions now">
+                                <span class="refresh-icon" aria-hidden="true">&#8635;</span>
+                                <span class="sr-only">Refresh live data</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="info-cell info-cell-service">
+                        <span class="info-label">Next service</span>
+                        <div class="service-row">
+                            <strong id="infoService">...</strong>
+                            <span class="service-timing">
+                                <span id="infoTime" class="service-time"></span>
+                                <span id="infoCountdown" class="service-countdown"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-cell">
+                        <span class="info-label">Vehicle status</span>
+                        <strong id="infoStatus">Connecting...</strong>
+                    </div>
+                    <div class="info-cell">
+                        <span class="info-label">Indicator showing</span>
+                        <strong id="infoLights">...</strong>
+                    </div>
+                </div>
             </section>
 
             <section class="tile map-section">
@@ -139,11 +137,20 @@
                 <p class="map-intro" id="mapIntro">
                     Vehicles currently reported on this platform's feed, plotted by GPS position.
                 </p>
-                <div class="map-frame">
-                    <svg id="trainMap" viewBox="0 0 700 780" preserveAspectRatio="xMidYMid slice"
-                         role="img" aria-label="Map of live vehicle positions around Central Station"></svg>
+                <div class="map-pair">
+                    <div class="map-frame">
+                        <svg id="trainMap" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice"
+                             role="img" aria-label="Map of live vehicle positions around Central Station"></svg>
+                        <span class="map-caption">2 km around Central</span>
+                    </div>
+                    <div class="map-frame">
+                        <svg id="trainMapInset" viewBox="0 0 450 620" preserveAspectRatio="xMidYMid slice"
+                             role="img" aria-label="Close-up map of Central Station platforms"></svg>
+                        <span class="map-caption">Central Station close-up</span>
+                    </div>
                 </div>
             </section>
+
         </div>
 
         <p class="key-reference">

@@ -142,24 +142,22 @@ class TfNSWAPI {
         return centralPlatforms.getStationBounds();
     }
 
-    // Sydney Trains route ids are internal SECTOR codes rather than line codes.
-    // This mapping was derived by tallying each sector against the destinations in
-    // the feed's own vehicle labels (APS -> Campbelltown/Macarthur/Revesby = T8,
-    // WST -> Penrith/Richmond/Emu Plains = T1, and so on). It is inferred from live
-    // data, NOT published by TfNSW - re-check it if the timetable changes.
-    // CTY (Brisbane/Canberra/Perth) and RTTA (non-timetabled) intentionally have no
-    // line and stay unlabelled.
+    // Sydney Trains route ids are internal sector codes, not line codes. TfNSW
+    // doesn't publish what each sector means, so this was worked out by checking
+    // where each sector's trains actually go: APS only ever runs to Campbelltown,
+    // Macarthur and Revesby, which is T8. Same idea for the rest. It matches
+    // reality today but nothing guarantees it stays that way.
+    // CTY (Brisbane/Canberra/Perth) and RTTA (non-timetabled) have no line and are
+    // left unlabelled on purpose.
     static SECTOR_LINES = {
         APS: 'T8', ESI: 'T4', NSN: 'T1', NTH: 'T9', WST: 'T1',
         CMB: 'T5', OLY: 'T7', IWL: 'T2',
         BMT: 'BMT', CCN: 'CCN', SCO: 'SCO', SHL: 'SHL', HUN: 'HUN'
     };
 
-    // pulls a line code out of a vehicle feed route_id. metro and light rail encode
-    // it cleanly (SMNW_M1, 1001_L2, IWLR-191); heavy rail goes through SECTOR_LINES.
-    // `label` is the feed's trip description and is only used to split the one
-    // genuinely ambiguous sector.
-    getLineCodeFromRouteId(routeId, label) {
+    // metro and light rail put the line straight in the route id (SMNW_M1, 1001_L2,
+    // IWLR-191). Heavy rail needs the sector lookup above.
+    getLineCodeFromRouteId(routeId) {
         const id = String(routeId || '').toUpperCase();
         if (!id) return null;
         if (id.includes('IWLR')) return 'L1';
@@ -171,13 +169,7 @@ class TfNSWAPI {
         if (explicit) return explicit;
 
         const sector = tokens.find(t => t in TfNSWAPI.SECTOR_LINES);
-        if (!sector) return null;
-
-        // IWL is the only sector serving two lines - its Bankstown workings are T3,
-        // everything else (Leppington, Parramatta) is T2
-        if (sector === 'IWL' && /bankstown/i.test(label || '')) return 'T3';
-
-        return TfNSWAPI.SECTOR_LINES[sector];
+        return sector ? TfNSWAPI.SECTOR_LINES[sector] : null;
     }
 
     // categorizes a departure into one of six modes, for the multi-select filter.
