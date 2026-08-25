@@ -7,6 +7,7 @@ class HorizontalBoard {
         this.refreshInterval = null;
         this.searchTimeout = null;
         this.allDepartures = [];
+        this.selectedPlatform = 'all';
         this.init();
     }
 
@@ -15,7 +16,6 @@ class HorizontalBoard {
         this.loadBtn = document.getElementById('loadBtn');
         this.refreshBtn = document.getElementById('refreshBtn');
         this.departuresEl = document.getElementById('departures');
-        this.emptyStateEl = document.getElementById('emptyState');
         this.statusEl = document.getElementById('status');
         this.suggestionsEl = document.getElementById('suggestions');
         this.stationInfoEl = document.getElementById('stationInfo');
@@ -23,9 +23,17 @@ class HorizontalBoard {
         this.stationIdEl = document.getElementById('stationId');
         this.headerTimeEl = document.getElementById('headerTime');
         this.headerLeftEl = document.getElementById('headerLeft');
+        this.platformToggle = document.getElementById('platformToggle');
 
         this.loadBtn.addEventListener('click', () => this.loadDepartures());
         this.refreshBtn.addEventListener('click', () => this.refresh());
+        this.platformToggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('.platform-toggle-btn');
+            if (!btn) return;
+            this.selectedPlatform = btn.dataset.platform;
+            [...this.platformToggle.children].forEach(b => b.classList.toggle('active', b === btn));
+            this.renderDepartures();
+        });
 
         this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
         this.stopInput.addEventListener('keypress', (e) => {
@@ -158,7 +166,6 @@ class HorizontalBoard {
 
     async fetchAndDisplay() {
         this.showStatus('Loading departures...', 'loading');
-        this.emptyStateEl.style.display = 'none';
 
         try {
             const rawData = await api.getDeparturesRaw(this.stopId);
@@ -173,12 +180,9 @@ class HorizontalBoard {
                 this.headerLeftEl.textContent = 'Next Departures';
             }
 
-            if (filtered.length === 0) {
-                this.departuresEl.innerHTML = '';
-            } else {
-                this.allDepartures = filtered;
-                this.renderDepartures();
-            }
+            this.allDepartures = filtered;
+            this.updatePlatformSelector();
+            this.renderDepartures();
 
             this.displayStationInfo();
             const timeStr = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -186,8 +190,7 @@ class HorizontalBoard {
         } catch (error) {
             console.error('Error:', error);
             this.showStatus('Error loading departures. Check console for details.', 'error');
-            this.emptyStateEl.style.display = 'block';
-            this.emptyStateEl.innerHTML = '<p>Error loading departures. Please check your API key and stop ID.</p>';
+            this.departuresEl.innerHTML = '<p class="no-departures">Error loading departures. Please check your API key and stop ID.</p>';
         }
     }
 
@@ -203,22 +206,54 @@ class HorizontalBoard {
         }
     }
 
-    // reverts the board to its initial empty state - used when a station turns out not to be metro
+    // reverts the board to its initial empty state - used when a station turns out not to be metro.
+    // the board itself always stays visible (outline included) - only the message inside changes
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
         }
-        this.departuresEl.innerHTML = '';
+        this.departuresEl.innerHTML = '<p class="no-departures">No information available. Select a valid Metro station.</p>';
         this.stationInfoEl.style.display = 'none';
-        this.emptyStateEl.style.display = 'block';
-        this.emptyStateEl.innerHTML = '<p>Enter a stop ID or search for a station and click "Load Departures" to begin</p>';
+        this.selectedPlatform = 'all';
+        this.platformToggle.innerHTML = '';
+        this.platformToggle.style.display = 'none';
+    }
+
+    // shows a platform picker only when the station actually has more than one -
+    // most stations only have one metro platform, so it stays hidden there
+    updatePlatformSelector() {
+        const platforms = [...new Set(this.allDepartures.map(dep => api.getShortPlatform(dep.platform)))]
+            .filter(p => p && p !== '-')
+            .sort();
+
+        if (platforms.length <= 1) {
+            this.platformToggle.innerHTML = '';
+            this.platformToggle.style.display = 'none';
+            this.selectedPlatform = 'all';
+            return;
+        }
+
+        if (this.selectedPlatform !== 'all' && !platforms.includes(this.selectedPlatform)) {
+            this.selectedPlatform = 'all';
+        }
+
+        const options = [{ value: 'all', label: 'All' }, ...platforms.map(p => ({ value: p, label: p }))];
+        this.platformToggle.innerHTML = options.map(o => {
+            const active = o.value === this.selectedPlatform ? ' active' : '';
+            return `<button type="button" class="platform-toggle-btn${active}" data-platform="${api.escapeHtml(o.value)}">${api.escapeHtml(o.label)}</button>`;
+        }).join('');
+        this.platformToggle.style.display = 'flex';
     }
 
     renderDepartures() {
-        const departuresToRender = this.allDepartures.slice(0, 4);
+        const filteredByPlatform = this.selectedPlatform === 'all'
+            ? this.allDepartures
+            : this.allDepartures.filter(dep => api.getShortPlatform(dep.platform) === this.selectedPlatform);
+
+        const departuresToRender = filteredByPlatform.slice(0, 4);
         if (departuresToRender.length === 0) {
-            this.departuresEl.innerHTML = '<p class="no-departures">No departures</p>';
+            this.departuresEl.innerHTML = '<p class="no-departures">No information available. Select a valid Metro station.</p>';
             return;
         }
 
@@ -254,7 +289,7 @@ class HorizontalBoard {
 
             const serviceNameEl = document.createElement('div');
             serviceNameEl.className = 'service-name';
-            serviceNameEl.textContent = api.escapeHtml(dep.destination) || 'Unknown';
+            serviceNameEl.textContent = api.shortStationName(dep.destination) || 'Unknown';
             nameLineEl.appendChild(serviceNameEl);
 
             // tfnsw doesn't provide real stopping-pattern data for metro - see m1Line.js

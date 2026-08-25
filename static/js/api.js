@@ -36,7 +36,9 @@ class TfNSWAPI {
     }
 
     // live gtfs-realtime vehicle positions, merged across the named feeds
-    // (see VEHICLE_FEEDS in app.py for valid names)
+    // (see VEHICLE_FEEDS in app.py for valid names).
+    // returns { vehicles, errors } - a single feed can fail while the rest succeed,
+    // so callers should check errors rather than assume a short list means quiet.
     async getVehiclePositions(feeds) {
         const list = Array.isArray(feeds) ? feeds : [feeds];
         try {
@@ -45,7 +47,10 @@ class TfNSWAPI {
                 throw new Error(`API Error: ${response.status}`);
             }
             const data = await response.json();
-            return Array.isArray(data.vehicles) ? data.vehicles : [];
+            return {
+                vehicles: Array.isArray(data.vehicles) ? data.vehicles : [],
+                errors: data.errors || {}
+            };
         } catch (error) {
             console.error('Error fetching vehicle positions:', error);
             throw error;
@@ -120,6 +125,13 @@ class TfNSWAPI {
         return m1Line.isM1Station(name);
     }
 
+    // short display form of a station name ("Tallawong Station, Tallawong" ->
+    // "Tallawong") - TfNSW's destination field isn't consistently short, e.g. a
+    // terminus's return-direction destination can come back in the full form
+    shortStationName(name) {
+        return m1Line.normalizeStationName(name);
+    }
+
     // central station platform data lives in centralPlatforms.js - delegated here
     // for the same reason as m1Line above
     getCentralPlatform(id) {
@@ -140,6 +152,18 @@ class TfNSWAPI {
 
     getCentralStationBounds() {
         return centralPlatforms.getStationBounds();
+    }
+
+    getBerthPlatformNumber(stopId) {
+        return centralPlatforms.getBerthPlatformNumber(stopId);
+    }
+
+    getBerthStation(stopId) {
+        return centralPlatforms.getBerthStation(stopId);
+    }
+
+    isInCentralStationArea(stopId) {
+        return centralPlatforms.isInCentralStationArea(stopId);
     }
 
     // Sydney Trains route ids are internal sector codes, not line codes. TfNSW

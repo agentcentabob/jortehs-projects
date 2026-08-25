@@ -23,7 +23,8 @@
                     <input type="text" id="stopInput" placeholder="Search station by name or enter Stop ID" />
                     <div id="suggestions" class="suggestions-dropdown"></div>
                 </div>
-                <button id="loadBtn">Load Departures</button>
+                <div class="platform-toggle" id="platformToggle" style="display: none;"></div>
+                <button id="loadBtn" title="Load Departures">→</button>
                 <button id="refreshBtn">⟳</button>
             </div>
             <div class="status" id="status"></div>
@@ -34,11 +35,9 @@
                 <span class="header-left" id="headerLeft"></span>
                 <span class="header-right" id="headerTime"></span>
             </div>
-            <div id="departures" class="departures-list"></div>
-        </div>
-
-        <div class="empty-state" id="emptyState">
-            <p>Enter a stop ID or search for a station and click "Load Departures" to begin</p>
+            <div id="departures" class="departures-list">
+                <p class="no-departures">No information available. Select a valid Metro station.</p>
+            </div>
         </div>
     </div>
 

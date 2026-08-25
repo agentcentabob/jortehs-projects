@@ -18,8 +18,6 @@ class VerticalBoard {
         this.refreshBtn = document.getElementById('refreshBtn');
         this.suggestionsEl = document.getElementById('suggestions');
         this.statusEl = document.getElementById('status');
-        this.emptyStateEl = document.getElementById('emptyState');
-        this.verticalBoardEl = document.getElementById('verticalBoard');
         this.stationInfoEl = document.getElementById('stationInfo');
         this.stationNameEl = document.getElementById('stationName');
         this.stationIdEl = document.getElementById('stationId');
@@ -171,8 +169,6 @@ class VerticalBoard {
 
     async fetchAndDisplay() {
         this.showStatus('Loading departures...', 'loading');
-        this.emptyStateEl.style.display = 'none';
-        this.verticalBoardEl.style.display = 'flex';
 
         try {
             const rawData = await api.getDeparturesRaw(this.stopId);
@@ -190,9 +186,12 @@ class VerticalBoard {
         } catch (error) {
             console.error('Error:', error);
             this.showStatus('Error loading departures. Check console for details.', 'error');
-            this.verticalBoardEl.style.display = 'none';
-            this.emptyStateEl.style.display = 'block';
-            this.emptyStateEl.innerHTML = '<p>Error loading departures. Please check your API key and stop ID.</p>';
+            this.platform1HeaderTitle.textContent = 'Platform –';
+            this.platform2HeaderTitle.textContent = 'Platform –';
+            this.platform1NextStop.textContent = '';
+            this.platform2NextStop.textContent = '';
+            this.showNoDepartures(this.platform1List, 'Error loading departures. Please check your API key and stop ID.');
+            this.showNoDepartures(this.platform2List, 'Error loading departures. Please check your API key and stop ID.');
         }
     }
 
@@ -208,20 +207,38 @@ class VerticalBoard {
         }
     }
 
-    // reverts the board to its initial empty state - used when a station turns out not to be metro
+    // reverts the board to its initial empty state - used when a station turns out not to be metro.
+    // the board itself always stays visible (outline included) - only the message inside changes
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
         }
-        this.verticalBoardEl.style.display = 'none';
         this.stationInfoEl.style.display = 'none';
-        this.emptyStateEl.style.display = 'block';
-        this.emptyStateEl.innerHTML = '<p>Enter a stop ID or search for a station to load departures</p>';
+        this.platform1HeaderTitle.textContent = 'Platform –';
+        this.platform2HeaderTitle.textContent = 'Platform –';
+        this.platform1NextStop.textContent = '';
+        this.platform2NextStop.textContent = '';
+        this.showNoDepartures(this.platform1List);
+        this.showNoDepartures(this.platform2List);
     }
 
     renderBoard() {
         // group departures by platform, show the two busiest
+        // a valid station can still have nothing running right now (e.g. late
+        // night) - platforms can't be labelled with no departures to group by, so
+        // show the message in the departures area itself rather than a fake shell
+        if (this.allDepartures.length === 0) {
+            this.platform1HeaderTitle.textContent = 'Platform –';
+            this.platform2HeaderTitle.textContent = 'Platform –';
+            this.platform1NextStop.textContent = '';
+            this.platform2NextStop.textContent = '';
+            this.showNoDepartures(this.platform1List);
+            this.showNoDepartures(this.platform2List);
+            this.updateTicker();
+            return;
+        }
+
         const platformGroups = {};
         this.allDepartures.forEach(dep => {
             const platform = api.getShortPlatform(dep.platform) || 'Unknown';
@@ -246,6 +263,10 @@ class VerticalBoard {
         this.renderPlatformRows(this.platform2List, platformGroups[platform2] || []);
 
         this.updateTicker();
+    }
+
+    showNoDepartures(listEl, message = 'No information available. Select a valid Metro station.') {
+        listEl.innerHTML = `<p class="no-departures">${api.escapeHtml(message)}</p>`;
     }
 
     // next stop for a platform - derived from its first departure's direction,
@@ -308,7 +329,7 @@ class VerticalBoard {
 
         const destEl = document.createElement('span');
         destEl.className = 'row-dest';
-        destEl.textContent = dep.destination || 'Unknown';
+        destEl.textContent = api.shortStationName(dep.destination) || 'Unknown';
         destLine.appendChild(destEl);
 
         main.appendChild(destLine);

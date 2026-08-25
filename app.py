@@ -16,6 +16,10 @@ app = Flask(__name__)
 API_KEY = os.getenv('TFNSW_API_KEY')
 API_BASE_URL = 'https://api.transport.nsw.gov.au/v1/tp'
 
+# every outbound call gets one - without it a hung upstream connection blocks the
+# request forever, which showed up as the board freezing on "Loading information"
+REQUEST_TIMEOUT = 20
+
 # gtfs-realtime vehicle position feeds, keyed by the short name the frontend uses.
 # note the mixed versions: v2 superseded v1 for sydneytrains/metro/innerwest only
 # (v1 404s for those), while cbdandsoutheast and nswtrains still live on v1.
@@ -88,7 +92,8 @@ def get_departures():
         response = requests.get(
             f'{API_BASE_URL}/departure_mon',
             params=params,
-            headers=headers
+            headers=headers,
+            timeout=REQUEST_TIMEOUT
         )
         response.raise_for_status()
         return jsonify(response.json())
@@ -120,7 +125,8 @@ def get_stops():
         response = requests.get(
             f'{API_BASE_URL}/stop_finder',
             params=params,
-            headers=headers
+            headers=headers,
+            timeout=REQUEST_TIMEOUT
         )
         response.raise_for_status()
         data = response.json()

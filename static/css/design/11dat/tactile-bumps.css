@@ -182,15 +182,15 @@ header h1 {
 .tactile-strip {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     margin: 0 -20px;
     /* On the real platform the studded strip is fairly narrow with a wide run of
        plain concrete either side, and more of it towards the edge than behind.
        Roughly matching those proportions here. */
-    padding: 170px 20px 96px;
+    padding: 150px 20px 88px;
     /* Two concrete tones, like the photos: a paler smoother band along the edge,
        then the darker main platform paving from the bumps back. The hard stop at
-       170px is the same figure as the padding above, so they move together.
+       150px is the same figure as the padding above, so they move together.
        Slab joints are sized independently of the LED spacing so the concrete reads
        as paving rather than as a grid drawn around every light. */
     background-color: #a8a49b;
@@ -200,17 +200,17 @@ header h1 {
         linear-gradient(to bottom, rgba(255, 255, 255, 0.22) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(90, 90, 84, 0.25) 2px, transparent 2px),
         linear-gradient(to bottom,
-            #c6c4bc 0, #c6c4bc 164px,
-            #8f8b82 164px, #8f8b82 170px,
-            #a8a49b 170px, #a8a49b 100%);
-    background-size: 168px 100%, 168px 100%, 100% 132px, 100% 132px, 100% 100%;
+            #c6c4bc 0, #c6c4bc 144px,
+            #8f8b82 144px, #8f8b82 150px,
+            #a8a49b 150px, #a8a49b 100%);
+    background-size: 140px 100%, 140px 100%, 100% 110px, 100% 110px, 100% 100%;
     background-position: 1px 0, 0 0, 0 1px, 0 0, 0 0;
 }
 
 /* LED lenses set into the concrete. no per-dot elements - the whole row is one
    tiled gradient, so row height and background-size must stay in step. */
 .bump-row {
-    height: 34px;
+    height: 27px;
     --led: var(--yellow);
     background-image:
         /* the lens: hot core, body, bright edge, then a dark recessed seat */
@@ -225,11 +225,11 @@ header h1 {
             color-mix(in srgb, var(--led) 40%, transparent) 0 44%,
             color-mix(in srgb, var(--led) 14%, transparent) 54%,
             transparent 68%);
-    background-size: 30px 30px;
+    background-size: 24px 24px;
     background-position: center;
 }
 
-/* the two upper rows respond to train state; the four below are a constant
+/* the two upper rows respond to train state; the ones below are a constant
    blue reference band, per the original sketch */
 .row-bottom {
     --led: var(--early);
@@ -240,19 +240,25 @@ header h1 {
     animation: none;
 }
 
-/* arriving and departing share one alert flash - the info box and key name which
-   of the two it currently is. closing has its own red/yellow pair. */
-.state-arriving .row-top,
-.state-departing .row-top {
-    animation: flash-alert 0.7s step-end infinite;
+/* one flash speed for every pattern, so nothing reads as more urgent than the
+   rest just because it blinks faster */
+.state-arriving .row-top {
+    animation: flash-alert 1.1s step-end infinite;
 }
 
 .state-closing .row-top {
-    animation: flash-closing 0.7s step-end infinite;
+    animation: flash-closing 1.1s step-end infinite;
 }
 
 .state-opening .row-top {
-    animation: flash-open 0.5s step-end infinite;
+    animation: flash-open 1.1s step-end infinite;
+}
+
+/* departing holds steady red rather than flashing, which keeps it clearly apart
+   from the arriving flash it used to share */
+.state-departing .row-top {
+    --led: #FF1717;
+    animation: none;
 }
 
 .state-arrived .row-top {
@@ -316,6 +322,50 @@ header h1 {
 
 .map-frame {
     position: relative;
+}
+
+.map-marker {
+    cursor: pointer;
+}
+
+.map-tooltip {
+    position: fixed;
+    z-index: 50;
+    background: #0b1020;
+    border: 1px solid #2f3f5f;
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--white);
+    font-size: 0.82em;
+    line-height: 1.45;
+    pointer-events: none;
+    max-width: 280px;
+}
+
+/* the signal berth the tracked vehicle is sitting in, under the status text */
+.info-loc {
+    font-size: 0.72em;
+    font-style: italic;
+    color: #6f7c94;
+    margin-top: 3px;
+}
+
+.tip-service {
+    font-size: 1.08em;
+    font-weight: 600;
+}
+
+.tip-detail {
+    font-size: 0.92em;
+    font-style: italic;
+    color: var(--l-gray);
+    margin-top: 2px;
+}
+
+.tip-location {
+    font-size: 0.88em;
+    color: #7f8ca6;
+    margin-top: 4px;
 }
 
 .map-caption {
@@ -600,9 +650,10 @@ header h1 {
 .led-idle { --led: var(--yellow); }
 .led-arrived { --led: #35DC4F; }
 .led-constant { --led: var(--early); }
-.led-alert { animation: flash-alert 0.7s step-end infinite; }
-.led-closing { animation: flash-closing 0.7s step-end infinite; }
-.led-open { animation: flash-open 0.5s step-end infinite; }
+.led-departing { --led: #FF1717; }
+.led-alert { animation: flash-alert 1.1s step-end infinite; }
+.led-closing { animation: flash-closing 1.1s step-end infinite; }
+.led-open { animation: flash-open 1.1s step-end infinite; }
 
 /* no max-width - should only wrap at the page edge, same as .intro */
 .key-reference {

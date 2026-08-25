@@ -172,7 +172,10 @@ export function getStationBounds() {
 // feed names their berths "Sydney 12 Loc" rather than "Central 12 Loc". Platforms
 // 16-27 use "Central 17 Loc". Both are the same station, so we have to accept both
 // names or platforms 1-15 never register a train at all.
-const BERTH_PATTERN = /(Central|Sydney) (\d+) Loc$/;
+// The station name has to sit right after the dot. Without that anchor
+// "NorthSydney.North Sydney 2 Loc" ends in "Sydney 2 Loc" and gets read as
+// Central platform 2, which put North Sydney's trains on this board.
+const BERTH_PATTERN = /(?:^|\.)(Central|Sydney) (\d+) Loc$/;
 const SYDNEY_TERMINAL_MAX_PLATFORM = 15;
 
 export function getBerthPlatformNumber(stopId) {
@@ -195,6 +198,26 @@ const BERTH_STATION_PATTERN = /([A-Za-z][A-Za-z ]*) (\d+) Loc$/;
 export function getBerthStation(stopId) {
     const match = BERTH_STATION_PATTERN.exec(stopId || '');
     return match ? match[1].trim() : null;
+}
+
+// Signal berths in the throat immediately outside Central's platforms, all within
+// about 200 m of the station. Collected by sampling the live feed and sorting by
+// distance, so it may not be exhaustive - an unlisted berth just means the board
+// treats a departing train as clear of the station slightly early.
+const CENTRAL_APPROACH_BERTHS = new Set([
+    'SY354', 'SY357', 'SY362', 'SY363', 'SY365', 'SY366', 'SY367', 'SY370',
+    'SY371', 'SY372', 'SY373', 'SY374', 'SY379', 'SY389', 'SY395'
+]);
+
+// a berth can name more than one code, e.g. "Sydney.CO271/SY366 Loc"
+function berthCodes(stopId) {
+    return String(stopId || '').match(/[A-Z]{2}\d+/g) || [];
+}
+
+// true if this berth is a Central platform or one of the throat berths beside it
+export function isInCentralStationArea(stopId) {
+    if (getBerthPlatformNumber(stopId) !== null) return true;
+    return berthCodes(stopId).some(code => CENTRAL_APPROACH_BERTHS.has(code));
 }
 
 // both of these berth station names mean Central (see BERTH_PATTERN above)

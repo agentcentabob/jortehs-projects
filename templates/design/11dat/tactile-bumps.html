@@ -40,6 +40,8 @@
                         <div class="bump-row row-bottom"></div>
                         <div class="bump-row row-bottom"></div>
                         <div class="bump-row row-bottom"></div>
+                        <div class="bump-row row-bottom"></div>
+                        <div class="bump-row row-bottom"></div>
                     </div>
                 </div>
             </section>
@@ -84,10 +86,10 @@
                         <p class="key-meaning">Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure, whichever is later, then runs for 5 seconds.</p>
                     </li>
                     <li class="key-item">
-                        <span class="key-led led-alert"></span>
-                        <span class="key-state">Flashing red / orange</span>
+                        <span class="key-led led-departing"></span>
+                        <span class="key-state">Steady red</span>
                         <button type="button" class="key-demo-btn" data-state="departing" aria-label="Hold the 'vehicle departing' state"></button>
-                        <p class="key-meaning">Vehicle departing. Shares the arriving pattern. Runs from the moment the doors finish closing until it is seen at its next stop.</p>
+                        <p class="key-meaning">Vehicle departing. Runs from the moment the doors finish closing until it has pulled clear of the platform.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-constant"></span>
@@ -124,6 +126,7 @@
                     <div class="info-cell">
                         <span class="info-label">Vehicle status</span>
                         <strong id="infoStatus">Connecting...</strong>
+                        <span class="info-loc" id="infoLoc"></span>
                     </div>
                     <div class="info-cell">
                         <span class="info-label">Indicator showing</span>

@@ -132,6 +132,20 @@ button:active {
     transform: scale(0.98);
 }
 
+/* segmented "All / 26 / 27" toggle - each option is a plain button (inherits
+   the base button styling), the selected one highlighted in the board's teal */
+.platform-toggle {
+    display: none;
+    gap: 6px;
+}
+.platform-toggle-btn.active {
+    background: var(--metro);
+    color: var(--white);
+}
+.platform-toggle-btn.active:hover {
+    background: var(--metro);
+}
+
 .status {
     margin-top: 6px;
     font-size: 0.9em;
@@ -139,6 +153,8 @@ button:active {
     min-height: 20px;
 }
 
+/* fixed height (not max-height) so the board outline is always fully visible,
+   whether it's showing 4 rows, fewer, or the no-departures message */
 .board {
     background: var(--white);
     border: 1px solid #000;
@@ -146,11 +162,14 @@ button:active {
     overflow: hidden;
     margin: 10px;
     max-width: 960px;
-    max-height: 480px;
+    height: 480px;
+    display: flex;
+    flex-direction: column;
 }
 
 .board-header {
     height: 70px;
+    flex: 0 0 auto;
     background: var(--metro);
     display: flex;
     justify-content: space-between;
@@ -169,10 +188,18 @@ button:active {
 }
 
 .departures-list {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     overflow-y: auto;
 }
 
+/* flex:1 1 0 makes each row take an equal share of the fixed departures-list
+   height, so exactly 4 rows always fill the board rather than being
+   content-sized (and possibly clipped or leaving a gap) */
 .departure-row {
+    flex: 1 1 0;
     display: grid;
     grid-template-columns: 4fr 1fr 1fr;
     gap: 25px;
@@ -193,6 +220,7 @@ button:active {
 .dest {
     display: flex;
     flex-direction: column;
+    justify-content: center;
 }
 
 /* destination name and stopping pattern share a line */
@@ -204,12 +232,12 @@ button:active {
 }
 
 .dest .service-name {
-    font-size: 1.9em;
+    font-size: 2.05em;
     font-weight: 600;
 }
 
 .dest .destination-via {
-    font-size: 1.1em;
+    font-size: 1.2em;
     color: #666;
 }
 
@@ -267,19 +295,18 @@ button:active {
     animation: blink 2s steps(2, start) infinite;
 }
 
+/* fills and centers within .departures-list, in place of rows, when a valid
+   station genuinely has nothing running right now */
 .no-departures {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     color: var(--dark-gray);
     font-style: italic;
     padding: 20px;
     margin: 0;
-}
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--l-gray);
-    font-size: 1.1em;
-    font-style: italic;
 }
 .loading {
     color: var(--l-gray);
