@@ -1,4 +1,5 @@
 import api from '../../api.js';
+import * as common from './boardCommon.js';
 
 class HorizontalBoard {
     constructor() {
@@ -25,8 +26,8 @@ class HorizontalBoard {
         this.headerLeftEl = document.getElementById('headerLeft');
         this.platformToggle = document.getElementById('platformToggle');
 
-        this.loadBtn.addEventListener('click', () => this.loadDepartures());
-        this.refreshBtn.addEventListener('click', () => this.refresh());
+        this.loadBtn.addEventListener('click', () => common.loadDepartures(this));
+        this.refreshBtn.addEventListener('click', () => common.refresh(this));
         this.platformToggle.addEventListener('click', (e) => {
             const btn = e.target.closest('.platform-toggle-btn');
             if (!btn) return;
@@ -35,24 +36,9 @@ class HorizontalBoard {
             this.renderDepartures();
         });
 
-        this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
-        this.stopInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.loadDepartures();
-            }
-        });
+        common.setupStationSearch(this);
 
-        document.addEventListener('click', (e) => {
-            if (e.target !== this.stopInput) {
-                this.suggestionsEl.style.display = 'none';
-            }
-        });
-
-        const savedStopId = localStorage.getItem('lastStopId');
-        if (savedStopId) {
-            this.stopInput.value = savedStopId;
-        }
-
+        // search bar always starts empty - no restoring the last station searched
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
     }
@@ -68,119 +54,16 @@ class HorizontalBoard {
         }
     }
 
-    async handleSearch(e) {
-        const query = e.target.value.trim();
-
-        if (query.length < 4) {
-            this.suggestionsEl.style.display = 'none';
-            return;
-        }
-
-        clearTimeout(this.searchTimeout);
-        this.searchTimeout = setTimeout(async () => {
-            try {
-                const stops = await api.searchStops(query);
-                this.displaySuggestions(stops.slice(0, 6));
-            } catch (error) {
-                console.error('Search error:', error);
-            }
-        }, 300);
-    }
-
-    displaySuggestions(stops) {
-        this.suggestionsEl.innerHTML = '';
-
-        if (stops.length === 0) {
-            this.suggestionsEl.style.display = 'none';
-            return;
-        }
-
-        stops.forEach(stop => {
-            const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            item.innerHTML = `<span class="stop-name">${api.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
-            item.addEventListener('click', () => {
-                this.stopInput.value = stop.name;
-                this.stopId = stop.id;
-                this.stopName = stop.name;
-                this.suggestionsEl.style.display = 'none';
-                this.loadDepartures();
-            });
-            this.suggestionsEl.appendChild(item);
-        });
-
-        this.suggestionsEl.style.display = 'block';
-    }
-
-    async loadDepartures() {
-        const inputValue = this.stopInput.value.trim();
-
-        if (!inputValue) {
-            this.showStatus('Please enter a stop ID or search for a station', 'error');
-            return;
-        }
-
-        // keep the resolved id/name if the box still shows exactly what a suggestion
-        // set, otherwise resolve whatever was typed - name or stop id - via search
-        if (!(this.stopId && this.stopName === inputValue)) {
-            this.showStatus('Looking up station...', 'loading');
-            try {
-                const stops = await api.searchStops(inputValue);
-                if (stops.length > 0) {
-                    this.stopId = stops[0].id;
-                    this.stopName = stops[0].name;
-                } else {
-                    this.stopId = inputValue;
-                    this.stopName = inputValue;
-                }
-            } catch (error) {
-                console.error('Stop lookup error:', error);
-                this.stopId = inputValue;
-                this.stopName = inputValue;
-            }
-        }
-
-        // this board only shows metro (m1) departures - reject anything else here
-        if (!api.isM1Station(this.stopName)) {
-            this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
-            this.stopId = null;
-            this.stopName = null;
-            this.resetToEmptyState();
-            return;
-        }
-
-        localStorage.setItem('lastStopId', this.stopId);
-
-        await this.fetchAndDisplay();
-
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-        this.refreshInterval = setInterval(() => this.refresh(), 30000);
-    }
-
-    async refresh() {
-        if (!this.stopId) return;
-        await this.fetchAndDisplay();
-    }
-
     async fetchAndDisplay() {
         this.showStatus('Loading departures...', 'loading');
 
         try {
-            const rawData = await api.getDeparturesRaw(this.stopId);
-            const departures = api.parseDeparturesRaw(rawData);
-
-            // this board only ever shows metro departures
-            const filtered = departures.filter(dep =>
-                dep.line && dep.line.toLowerCase().includes('metro')
-            );
+            this.allDepartures = await common.fetchMetroDepartures(this.stopId);
 
             if (this.headerLeftEl) {
                 this.headerLeftEl.textContent = 'Next Departures';
             }
 
-            this.allDepartures = filtered;
             this.updatePlatformSelector();
             this.renderDepartures();
 
@@ -195,15 +78,7 @@ class HorizontalBoard {
     }
 
     displayStationInfo() {
-        if (this.stopId && this.stopName) {
-            this.stationNameEl.textContent = this.stopName;
-            this.stationIdEl.textContent = `(${this.stopId})`;
-            this.stationInfoEl.style.display = 'block';
-        } else if (this.stopId) {
-            this.stationNameEl.textContent = this.stopId;
-            this.stationIdEl.textContent = '';
-            this.stationInfoEl.style.display = 'block';
-        }
+        common.displayStationInfo(this);
     }
 
     // reverts the board to its initial empty state - used when a station turns out not to be metro.
@@ -218,6 +93,16 @@ class HorizontalBoard {
         this.selectedPlatform = 'all';
         this.platformToggle.innerHTML = '';
         this.platformToggle.style.display = 'none';
+    }
+
+    // the station is real and on the M1, but the Bankstown extension segment
+    // it's part of isn't carrying passengers yet
+    showLineOpeningSoon() {
+        this.allDepartures = [];
+        this.platformToggle.innerHTML = '';
+        this.platformToggle.style.display = 'none';
+        this.departuresEl.innerHTML = '<p class="no-departures">No services running currently - line opening soon.</p>';
+        this.displayStationInfo();
     }
 
     // shows a platform picker only when the station actually has more than one -
@@ -316,8 +201,7 @@ class HorizontalBoard {
     }
 
     showStatus(message, type) {
-        this.statusEl.textContent = message;
-        this.statusEl.className = `status ${type}`;
+        common.showStatus(this.statusEl, message, type);
     }
 }
 

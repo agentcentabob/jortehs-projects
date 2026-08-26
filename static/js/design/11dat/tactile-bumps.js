@@ -11,36 +11,16 @@ const TICK_MS = 250;        // re-derive the phase often enough for the fixed ti
 // a stand, worked out by watching its position between polls. Everything after
 // that is a fixed timer, because no TfNSW API reports door state at all.
 //
-// Cap on how long "arriving" can run before we give up waiting for the train to
-// be seen stopping. Only a fallback - normally the position tells us.
-const ARRIVING_MAX_MS = 90000;
-// under this much movement between readings the vehicle counts as stopped
-const STOPPED_THRESHOLD_M = 20;
+const ARRIVING_AT_PLATFORM_MS = 10000;  // keeps flashing 10s after it pulls in
 const OPENING_MS = 10000;            // doors-opening flash runs ~10s
 const DOORS_OPEN_MIN_MS = 60000;     // doors stay open at least 60s after opening
 const CLOSE_BEFORE_DEPARTURE_MS = 30000; // ...or until :30 of the minute before departure
 const CLOSING_MS = 5000;             // doors take ~5s to finish closing
 // departing normally ends when the vehicle is seen at its next stop; this only
 // catches the case where it drops out of the feed entirely
-const DEPARTING_MAX_MS = 240000;
+const DEPARTING_MAX_MS = 120000;
 // shorter cap for when the vehicle vanishes from the feed altogether
 const DEPARTING_LOST_MS = 45000;
-
-// How close a vehicle has to be for each flash. Departing is tighter than arriving
-// so the lights clear soon after the vehicle pulls away. Light rail stops are much
-// closer together than train stations, so it gets tighter figures again.
-const FLASH_RADII = {
-    'light rail': { arriving: 150, departing: 75 },
-    default: { arriving: 250, departing: 100 }
-};
-
-// stop following a vehicle on the map once it's this far away, so the highlight
-// can't get stuck on a train that left ages ago
-const TRACKING_MAX_M = 1500;
-
-// Plenty of entries in the feed are stale (some by hours), so a position is only
-// trusted for the distance check if it was reported recently.
-const MAX_POSITION_AGE_S = 120;
 
 // A vehicle only counts as being at, or heading for, this platform if its position
 // is recent. Without this a train that reported a Central berth hours ago kept the
@@ -89,6 +69,7 @@ const infoCountdown = document.getElementById('infoCountdown');
 const infoStatus = document.getElementById('infoStatus');
 const infoLights = document.getElementById('infoLights');
 const infoLoc = document.getElementById('infoLoc');
+const infoServiceNote = document.getElementById('infoServiceNote');
 const demoButtons = document.querySelectorAll('.key-demo-btn');
 const mapIntro = document.getElementById('mapIntro');
 const refreshButton = document.getElementById('refreshBtn');
@@ -100,25 +81,17 @@ let feedErrors = {};
 let lastError = null;
 
 let phase = 'idle';
-// when the vehicle was first seen stopped at this platform - anchors the timings
-let platformArrivalAt = null;
-// identity of that vehicle, so it can be followed once it leaves the platform
-let trackedVehicleKey = null;
-let departingSince = null;
-let reachedAtPlatform = false;
+// when the platform berth became occupied - the whole sequence hangs off this
+let arrivedAt = null;
+// last tick a vehicle was actually seen in the berth
+let lastSeenAtPlatform = null;
 // latched once per dwell so a changing departures list can't move it
 let doorsCloseAt = null;
-// when the vehicle actually pulled off the platform berth
-let vehicleLeftAt = null;
-// last tick a vehicle was actually seen in the berth
-let lastAtPlatformAt = null;
-// this dwell's own departure, so the panel doesn't jump to the next service while
-// the train is still standing there
+let departingSince = null;
+// the vehicle the lights are currently about
+let relevantVehicleKey = null;
+// this dwell's own departure, so the panel doesn't jump to the next service
 let dwellDeparture = null;
-// how far through the dwell we are, so phases can only move forwards
-let dwellStage = -1;
-// when the train was seen to come to a stand at the platform
-let stoppedAt = null;
 
 let liveMode = true;
 let isLoading = false;
@@ -223,41 +196,14 @@ function metresBetween(lat1, lon1, lat2, lon2) {
     return Math.hypot((lat1 - lat2) * 111000, (lon1 - lon2) * 92500);
 }
 
-function metresFromPlatform(vehicle) {
-    if (!platform || !platform.coord || typeof vehicle.lat !== 'number') return null;
-    return metresBetween(vehicle.lat, vehicle.lon, platform.coord[0], platform.coord[1]);
-}
-
 function positionAge(vehicle) {
     if (!vehicle.timestamp) return Infinity;
     return (Date.now() / 1000) - vehicle.timestamp;
 }
 
-function positionIsFresh(vehicle) {
-    return positionAge(vehicle) <= MAX_POSITION_AGE_S;
-}
-
 // vehicles recent enough to draw on the map
 function liveVehicles() {
     return vehicles.filter(v => positionAge(v) <= MAP_MAX_AGE_S);
-}
-
-// vehicles recent enough to say something about this platform right now
-function vehiclesAtThisPlatform() {
-    return vehicles.filter(v =>
-        positionAge(v) <= PRESENCE_MAX_AGE_S && api.vehicleMatchesPlatform(v, platform));
-}
-
-// Near enough to flash. If the position is too old to trust we fall back to
-// believing the feed's own status, rather than flashing on a stale fix.
-function isWithin(vehicle, radiusM) {
-    if (!positionIsFresh(vehicle)) return true;
-    const metres = metresFromPlatform(vehicle);
-    return metres === null || metres <= radiusM;
-}
-
-function flashRadii() {
-    return FLASH_RADII[noun()] || FLASH_RADII.default;
 }
 
 // metro and light rail send a heading; sydneytrains never does, so for those we
@@ -277,9 +223,7 @@ function headingFor(vehicle) {
     return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
 }
 
-// Tracks each vehicle's position between polls. This gives two things: a heading
-// for feeds that don't send one, and whether the vehicle is actually moving, which
-// is the only real "it has stopped" signal these feeds offer.
+// keeps the last position per vehicle so the next poll can derive a heading
 function rememberPositions() {
     const seen = new Set();
 
@@ -291,152 +235,114 @@ function rememberPositions() {
         const previous = lastSeenPositions.get(key);
         if (!previous) {
             lastSeenPositions.set(key, {
-                lat: v.lat, lon: v.lon, timestamp: v.timestamp,
-                heading: headingFor(v), stopped: null, stoppedAt: null
+                lat: v.lat, lon: v.lon, timestamp: v.timestamp, heading: headingFor(v)
             });
             return;
         }
 
-        // A repeated position with the same timestamp is the same old reading, not
-        // evidence the vehicle is standing still. Only judge movement when the feed
-        // has actually reported something new.
+        // a repeated position with the same timestamp is the same old reading, so
+        // there is nothing new to learn from it
         if (v.timestamp && previous.timestamp && v.timestamp === previous.timestamp) return;
 
         const moved = metresBetween(v.lat, v.lon, previous.lat, previous.lon);
-        const stopped = moved < STOPPED_THRESHOLD_M;
-
         lastSeenPositions.set(key, {
             lat: v.lat,
             lon: v.lon,
             timestamp: v.timestamp,
-            heading: moved < MIN_MOVE_FOR_BEARING_M ? previous.heading : headingFor(v),
-            stopped,
-            // when it first came to a stand, which is what the dwell hangs off
-            stoppedAt: stopped ? (previous.stoppedAt ?? Date.now()) : null
+            heading: moved < MIN_MOVE_FOR_BEARING_M ? previous.heading : headingFor(v)
         });
     });
 
-    // drop anything that's no longer in the feed, otherwise this grows for as long
-    // as the page is left open
+    // drop anything no longer in the feed, or this grows for as long as the page
+    // is left open
     lastSeenPositions.forEach((_, key) => {
         if (!seen.has(key)) lastSeenPositions.delete(key);
     });
 }
 
-// when this vehicle came to a stand, or null if it is moving or not yet judged
-function stoppedSince(vehicle) {
-    const key = vehicleKey(vehicle);
-    const tracked = key ? lastSeenPositions.get(key) : null;
-    return tracked && tracked.stopped ? tracked.stoppedAt : null;
-}
-
-// several vehicles can legitimately report the same stop id at once (common on
-// light rail, where one tram is STOPPED_AT while the next is INCOMING_AT). only
-// one of them is "the vehicle at this platform", so pick deliberately rather than
-// highlighting every match.
+// the vehicle the whole board is talking about - see findRelevantVehicle
 function primaryVehicle() {
-    if (trackedVehicleKey) {
-        const tracked = vehicles.find(v => vehicleKey(v) === trackedVehicleKey);
-        // let go once it's well away, otherwise the highlight sticks to a vehicle
-        // that left the station a long time ago
-        const distance = tracked ? metresFromPlatform(tracked) : null;
-        const stillNear = tracked
-            && positionAge(tracked) <= MAP_MAX_AGE_S
-            && (distance === null || distance <= TRACKING_MAX_M)
-            && !api.vehicleIsAtAnotherStation(tracked, platform);
-        if (stillNear) return tracked;
-    }
-    const matched = vehiclesAtThisPlatform();
-    // IN_TRANSIT_TO is included so the map can highlight a vehicle as soon as the
-    // feed says it's heading here, even if that's still a kilometre away
-    return matched.find(v => v.status === 'STOPPED_AT' || !v.status)
-        || matched.find(v => v.status === 'INCOMING_AT')
-        || matched.find(v => v.status === 'IN_TRANSIT_TO')
-        || null;
+    return findRelevantVehicle().vehicle;
 }
 
-function findTrainAtPlatform(matched) {
-    return matched.find(v => v.status === 'STOPPED_AT' || !v.status) || null;
-}
-
-function trackedTrainReachedNextStop() {
-    if (!trackedVehicleKey) return false;
-    const tracked = vehicles.find(v => vehicleKey(v) === trackedVehicleKey);
-    // gone from the feed entirely - can't confirm, DEPARTING_MAX_MS handles it
-    if (!tracked) return false;
-    return api.vehicleIsAtAnotherStation(tracked, platform);
-}
-
-function clearTracking() {
-    platformArrivalAt = null;
-    trackedVehicleKey = null;
-    departingSince = null;
-    reachedAtPlatform = false;
+function resetDwell() {
+    arrivedAt = null;
     doorsCloseAt = null;
-    vehicleLeftAt = null;
-    lastAtPlatformAt = null;
+    departingSince = null;
+    lastSeenAtPlatform = null;
+    relevantVehicleKey = null;
     dwellDeparture = null;
-    dwellStage = -1;
-    stoppedAt = null;
 }
 
-// works out which phase the platform is in. once a vehicle is detected at the
-// platform every subsequent transition runs off the fixed timings above rather
-// than the feed, because no API reports door state.
+// The one vehicle this platform's lights are about, and where it is relative to
+// the platform. Everything downstream - phase, map highlight, the Loc readout -
+// uses this, so they can never disagree.
+function findRelevantVehicle() {
+    const fresh = vehicles.filter(v => positionAge(v) <= PRESENCE_MAX_AGE_S);
+    const mine = fresh.filter(v => api.vehicleMatchesPlatform(v, platform));
+
+    // sitting in the platform berth. heavy rail sends no status, so a berth match
+    // on its own means it is here.
+    const atPlatform = mine.find(v => v.status === 'STOPPED_AT' || !v.status);
+    if (atPlatform) return { vehicle: atPlatform, where: 'platform' };
+
+    // metro and light rail say outright when they are pulling in
+    const incoming = mine.find(v => v.status === 'INCOMING_AT');
+    if (incoming) return { vehicle: incoming, where: 'approach' };
+
+    // heavy rail: sitting in the berth immediately before this platform
+    if (platform.berthNumber !== null) {
+        const runIn = fresh.find(v =>
+            api.isApproachingPlatform(v.stopId, platform.berthNumber));
+        if (runIn) return { vehicle: runIn, where: 'approach' };
+    }
+
+    // still following the one that just pulled out
+    if (relevantVehicleKey) {
+        const leaving = vehicles.find(v => vehicleKey(v) === relevantVehicleKey);
+        if (leaving && positionAge(leaving) <= PRESENCE_MAX_AGE_S) {
+            return { vehicle: leaving, where: 'leaving' };
+        }
+    }
+    return { vehicle: null, where: 'none' };
+}
+
+// The sequence, start to finish:
+//   run-in berth            -> arriving
+//   reaches the platform    -> arriving for another 10s
+//   then                    -> doors opening (10s)
+//   then                    -> doors open, until 30s before departure or 60s
+//   then                    -> doors closing (5s), then departing
+//   clear of Central        -> idle
 function derivePhase() {
-    const matched = vehiclesAtThisPlatform();
     const now = Date.now();
-    const atPlatform = findTrainAtPlatform(matched);
+    const { vehicle, where } = findRelevantVehicle();
+    if (vehicle) relevantVehicleKey = vehicleKey(vehicle);
 
-    if (atPlatform) lastAtPlatformAt = now;
-
-    // One missed poll shouldn't end the dwell. Entries drop in and out as their
-    // timestamps age past the freshness cut, which made the board flick to
-    // "departed" and then straight back to departing again.
-    const stillInDwell = platformArrivalAt !== null
-        && lastAtPlatformAt !== null
-        && now - lastAtPlatformAt < PLATFORM_ABSENCE_GRACE_MS;
-
-    if (atPlatform || stillInDwell) {
-        if (platformArrivalAt === null) {
-            platformArrivalAt = now;
+    if (where === 'platform') {
+        lastSeenAtPlatform = now;
+        if (arrivedAt === null) {
+            arrivedAt = now;
             doorsCloseAt = null;
             departingSince = null;
-            vehicleLeftAt = null;
-            reachedAtPlatform = false;
-            dwellStage = -1;
-            stoppedAt = null;
-        }
-        // Follow whatever is in the berth now. Run numbers change at Central, so
-        // both vehicleId and tripId can change for the same physical train - the
-        // id is not a reliable "is this still the same train" signal here.
-        if (atPlatform) trackedVehicleKey = vehicleKey(atPlatform);
-
-        // The dwell hangs off the train coming to a stand, not off when we first
-        // noticed it. A signal berth reads as occupied while the train is still
-        // rolling in, so "first seen" fires well before it has actually arrived.
-        if (stoppedAt === null && atPlatform) stoppedAt = stoppedSince(atPlatform);
-
-        // still moving inside the berth, or we haven't had two readings yet
-        if (stoppedAt === null) {
-            // safety net: if movement never resolves, don't flash arriving forever
-            if (now - platformArrivalAt < ARRIVING_MAX_MS) return advanceDwell('arriving');
-            stoppedAt = now;
-        }
-
-        const since = now - stoppedAt;
-        if (since < OPENING_MS) return advanceDwell('opening');
-
-        reachedAtPlatform = true;
-
-        // Work the closing time out once and keep it. It used to be recalculated
-        // every tick from whatever was top of the departures list, so when a
-        // delayed service dropped off the list the closing time jumped to the next
-        // train's and the doors sprang back open.
-        if (doorsCloseAt === null) {
-            const doorsOpenedAt = stoppedAt + OPENING_MS;
-            // hold this train's own departure for the rest of the dwell
+            // this train's own departure, so the panel doesn't jump mid-dwell
             dwellDeparture = departures[0] || null;
+        }
+    }
+
+    // ride out a single missed poll rather than flickering back to idle
+    const inDwell = arrivedAt !== null
+        && now - lastSeenAtPlatform < PLATFORM_ABSENCE_GRACE_MS;
+
+    if (inDwell) {
+        const since = now - arrivedAt;
+        if (since < ARRIVING_AT_PLATFORM_MS) return 'arriving';
+        if (since < ARRIVING_AT_PLATFORM_MS + OPENING_MS) return 'opening';
+
+        // worked out once and kept. Recalculating it each tick meant a delayed
+        // train's departure dropped off the list and the doors sprang back open.
+        if (doorsCloseAt === null) {
+            const doorsOpenedAt = arrivedAt + ARRIVING_AT_PLATFORM_MS + OPENING_MS;
             const departureAt = nextDepartureAt();
             doorsCloseAt = Math.max(
                 doorsOpenedAt + DOORS_OPEN_MIN_MS,
@@ -444,71 +350,35 @@ function derivePhase() {
             );
         }
 
-        if (now < doorsCloseAt) return advanceDwell('arrived');
-        if (now < doorsCloseAt + CLOSING_MS) return advanceDwell('closing');
-
-        // doors have finished closing - departing starts here, even though the
-        // vehicle is often still physically at the platform
+        if (now < doorsCloseAt) return 'arrived';
+        if (now < doorsCloseAt + CLOSING_MS) return 'closing';
         if (departingSince === null) departingSince = now;
-        return advanceDwell('departing');
+        return 'departing';
     }
 
-    // it has left the platform berth
-    if (platformArrivalAt !== null) {
-        platformArrivalAt = null;
+    // it has pulled out of the platform berth
+    if (arrivedAt !== null) {
+        arrivedAt = null;
         doorsCloseAt = null;
-        vehicleLeftAt = now;
-        if (reachedAtPlatform && departingSince === null) {
-            departingSince = now;
-        } else if (departingSince === null) {
-            // passed through without ever boarding, nothing to follow
-            clearTracking();
-        }
+        if (departingSince === null) departingSince = now;
     }
 
     if (departingSince !== null) {
-        const tracked = trackedVehicleKey
-            ? vehicles.find(v => vehicleKey(v) === trackedVehicleKey)
-            : null;
-        let finished;
+        const elapsed = now - departingSince;
+        // A stale position kept reporting a berth the train had long left, which
+        // held the departing indicator on well after it had gone.
+        const fresh = vehicle && positionAge(vehicle) <= PRESENCE_MAX_AGE_S;
+        const stillAtCentral = fresh
+            && (platform.berthNumber === null || api.isInCentralStationArea(vehicle.stopId));
 
-        if (tracked) {
-            // Berth based rather than a distance: departing runs until the train
-            // has pulled out of Central's platform and throat berths entirely.
-            const stillAtStation = platform.berthNumber !== null
-                ? api.isInCentralStationArea(tracked.stopId)
-                : tracked.stopId === platform.stopId;
-
-            finished = (!stillAtStation && positionIsFresh(tracked))
-                || api.vehicleIsAtAnotherStation(tracked, platform)
-                || now - departingSince > DEPARTING_MAX_MS;
-        } else {
-            // Dropped out of the feed. Time this from when it actually left the
-            // platform, not from when departing began, or a train that sat there
-            // past its departure time snaps straight to idle the moment it moves.
-            finished = now - (vehicleLeftAt ?? departingSince) > DEPARTING_LOST_MS;
-        }
-
-        if (finished) clearTracking(); else return advanceDwell('departing');
+        if (stillAtCentral && elapsed < DEPARTING_MAX_MS) return 'departing';
+        // no fresh fix - hold briefly rather than snapping straight to idle
+        if (!fresh && elapsed < DEPARTING_LOST_MS) return 'departing';
+        resetDwell();
     }
 
-    // metro and light rail report this directly; heavy rail never does
-    const incoming = matched.find(v => v.status === 'INCOMING_AT');
-    if (incoming && isWithin(incoming, radii.arriving)) return 'arriving';
-
-    // No timetable fallback here. It used to flag "arriving" in the last 30s before
-    // a scheduled departure, which on a delayed service lit the platform up with no
-    // train anywhere near it, then dropped back to idle when nothing turned up.
+    if (where === 'approach') return 'arriving';
     return 'idle';
-}
-
-const DWELL_ORDER = ['arriving', 'opening', 'arrived', 'closing', 'departing'];
-
-// a dwell only ever moves forwards, so a phase can't come back once it has passed
-function advanceDwell(candidate) {
-    const index = DWELL_ORDER.indexOf(candidate);
-    if (index > dwellStage) dwellStage = index;
-    return DWELL_ORDER[dwellStage];
 }
 
 function applyPhase(next) {
@@ -578,6 +448,8 @@ function renderService() {
     infoTime.className = 'service-time';
     infoCountdown.textContent = '';
 
+    infoServiceNote.textContent = '';
+
     if (!next) {
         if (platform && platform.unpublished) {
             infoService.textContent = 'Not published by Transport for NSW';
@@ -603,6 +475,13 @@ function renderService() {
 
     infoService.appendChild(badge);
     infoService.appendChild(destination);
+
+    // Run numbers change at Central, so the train standing here cannot be tied to
+    // a timetabled service. Say so rather than implying we know.
+    const trainPresent = AT_PLATFORM_PHASES.includes(phase) || phase === 'departing';
+    infoServiceNote.textContent = trainPresent
+        ? 'Scheduled departure, not confirmed as the vehicle present'
+        : '';
 
     infoTime.textContent = formatClockTime(departureTimeOf(next));
     infoTime.className = `service-time ${delayClass(next.delay)}`;
@@ -966,29 +845,39 @@ async function poll() {
     isLoading = true;
     render();
 
-    try {
-        // every feed, not just this platform's, so the map shows all modes
-        const [rawDepartures, positions] = await Promise.all([
-            api.getDeparturesRaw(platform.stopId),
-            api.getVehiclePositions(ALL_FEEDS)
-        ]);
+    // Settled, not all: departures and positions fail independently. A 500 on
+    // departures used to throw away the vehicle positions too, which are what
+    // actually drive the lights.
+    const [departureResult, positionResult] = await Promise.allSettled([
+        api.getDeparturesRaw(platform.stopId),
+        api.getVehiclePositions(ALL_FEEDS)
+    ]);
 
+    if (positionResult.status === 'fulfilled') {
+        vehicles = positionResult.value.vehicles;
+        feedErrors = positionResult.value.errors;
+        rememberPositions();
+    }
+
+    if (departureResult.status === 'fulfilled') {
         // the stop id is already platform-specific, so everything returned belongs
         // here. Services that have already gone are dropped, with a small grace so
         // a train still sitting at the platform keeps its own departure showing.
         const cutoff = Date.now() - 30000;
-        departures = api.parseDeparturesRaw(rawDepartures)
+        departures = api.parseDeparturesRaw(departureResult.value)
             .filter(d => !d.isCancelled && departureTimeOf(d))
             .filter(d => new Date(departureTimeOf(d)).getTime() > cutoff)
             .sort((a, b) => new Date(departureTimeOf(a)) - new Date(departureTimeOf(b)));
-        vehicles = positions.vehicles;
-        feedErrors = positions.errors;
-        rememberPositions();
+    }
+
+    // only complain if nothing at all came back; keep the last good data otherwise
+    if (positionResult.status === 'rejected' && departureResult.status === 'rejected') {
+        lastError = positionResult.reason?.message || 'no response';
+    } else {
         lastError = null;
         hasLoaded = true;
-    } catch (error) {
-        lastError = error.message;
     }
+
     isLoading = false;
     tick();
 }
@@ -1000,7 +889,7 @@ function tick() {
 
 function startLive() {
     liveMode = true;
-    clearTracking();
+    resetDwell();
     syncDemoButtons();
     poll();
     if (!pollTimer) pollTimer = setInterval(poll, POLL_MS);
@@ -1012,7 +901,7 @@ function selectPlatform(id) {
     departures = [];
     hasLoaded = false;
     lastError = null;
-    clearTracking();
+    resetDwell();
     if (mainMap) mainMap.renderPlatform();
     if (insetMap) insetMap.renderPlatform();
     render();

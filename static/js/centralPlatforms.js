@@ -209,6 +209,26 @@ const CENTRAL_APPROACH_BERTHS = new Set([
     'SY371', 'SY372', 'SY373', 'SY374', 'SY379', 'SY389', 'SY395'
 ]);
 
+// The berth a train passes through immediately before it enters each platform.
+// TfNSW publishes no track layout, so this was worked out by watching which berth
+// each train came from in the live feed. Only platforms seen doing this
+// consistently are listed - anything missing falls back to starting "arriving"
+// when the train reaches the platform itself, rather than guessing.
+const PLATFORM_APPROACH_BERTHS = {
+    19: ['SY374'],
+    23: ['SY379'],
+    24: ['SY712'],
+    25: ['ES0.06']
+};
+
+// true if this berth is the known run-in to the given platform
+export function isApproachingPlatform(stopId, platformNumber) {
+    const berths = PLATFORM_APPROACH_BERTHS[platformNumber];
+    if (!berths) return false;
+    const id = String(stopId || '');
+    return berths.some(code => id.includes(`${code} Loc`));
+}
+
 // a berth can name more than one code, e.g. "Sydney.CO271/SY366 Loc"
 function berthCodes(stopId) {
     return String(stopId || '').match(/[A-Z]{2}\d+/g) || [];

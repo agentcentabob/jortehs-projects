@@ -88,18 +88,25 @@ def get_departures():
         'Authorization': f'apikey {API_KEY}'
     }
 
-    try:
-        response = requests.get(
-            f'{API_BASE_URL}/departure_mon',
-            params=params,
-            headers=headers,
-            timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-        return jsonify(response.json())
+    # TfNSW returns the odd 5xx for no obvious reason. One quick retry turns most
+    # of those into a normal response instead of a visible error on the board.
+    last_error = None
+    for attempt in range(2):
+        try:
+            response = requests.get(
+                f'{API_BASE_URL}/departure_mon',
+                params=params,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            return jsonify(response.json())
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            if attempt == 0:
+                time.sleep(0.4)
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': str(last_error)}), 502
 
 
 @app.route('/api/stops', methods=['GET'])

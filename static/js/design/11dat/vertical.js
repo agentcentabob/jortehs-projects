@@ -1,4 +1,5 @@
 import api from '../../api.js';
+import * as common from './boardCommon.js';
 
 const ROWS_PER_PLATFORM = 3;
 
@@ -33,36 +34,21 @@ class VerticalBoard {
         this.platform2NextStop = document.getElementById('platform2NextStop');
         this.platform2List = document.getElementById('platform2List');
 
-        this.loadBtn.addEventListener('click', () => this.loadDepartures());
-        this.refreshBtn.addEventListener('click', () => this.refresh());
+        this.loadBtn.addEventListener('click', () => common.loadDepartures(this));
+        this.refreshBtn.addEventListener('click', () => common.refresh(this));
 
-        this.stopInput.addEventListener('input', (e) => this.handleSearch(e));
-        this.stopInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.loadDepartures();
-            }
-        });
-
-        document.addEventListener('click', (e) => {
-            if (e.target !== this.stopInput) {
-                this.suggestionsEl.style.display = 'none';
-            }
-        });
+        common.setupStationSearch(this);
 
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
 
-        // kiosk deployments load via ?stop_id=, dev/testing can still use the search bar
+        // kiosk deployments load via ?stop_id= - otherwise the search bar
+        // always starts empty, no restoring the last station searched
         const params = new URLSearchParams(window.location.search);
         const urlStopId = params.get('stop_id');
         if (urlStopId) {
             this.stopInput.value = urlStopId;
-            this.loadDepartures();
-        } else {
-            const savedStopId = localStorage.getItem('lastStopId');
-            if (savedStopId) {
-                this.stopInput.value = savedStopId;
-            }
+            common.loadDepartures(this);
         }
     }
 
@@ -73,110 +59,11 @@ class VerticalBoard {
         if (this.platform2HeaderTime) this.platform2HeaderTime.textContent = timeString;
     }
 
-    async handleSearch(e) {
-        const query = e.target.value.trim();
-        if (query.length < 4) {
-            this.suggestionsEl.style.display = 'none';
-            return;
-        }
-
-        clearTimeout(this.searchTimeout);
-        this.searchTimeout = setTimeout(async () => {
-            try {
-                const stops = await api.searchStops(query);
-                this.displaySuggestions(stops.slice(0, 6));
-            } catch (error) {
-                console.error('Search error:', error);
-            }
-        }, 300);
-    }
-
-    displaySuggestions(stops) {
-        this.suggestionsEl.innerHTML = '';
-
-        if (stops.length === 0) {
-            this.suggestionsEl.style.display = 'none';
-            return;
-        }
-
-        stops.forEach(stop => {
-            const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            item.innerHTML = `<span class="stop-name">${api.escapeHtml(stop.name)}</span><span class="stop-id">${stop.id}</span>`;
-            item.addEventListener('click', () => {
-                this.stopInput.value = stop.name;
-                this.stopId = stop.id;
-                this.stopName = stop.name;
-                this.suggestionsEl.style.display = 'none';
-                this.loadDepartures();
-            });
-            this.suggestionsEl.appendChild(item);
-        });
-
-        this.suggestionsEl.style.display = 'block';
-    }
-
-    async loadDepartures() {
-        const inputValue = this.stopInput.value.trim();
-        if (!inputValue) {
-            this.showStatus('Please enter a stop ID or search for a station', 'error');
-            return;
-        }
-
-        // keep the resolved id/name if the box still shows exactly what a suggestion
-        // set, otherwise resolve whatever was typed - name or stop id - via search
-        if (!(this.stopId && this.stopName === inputValue)) {
-            this.showStatus('Looking up station...', 'loading');
-            try {
-                const stops = await api.searchStops(inputValue);
-                if (stops.length > 0) {
-                    this.stopId = stops[0].id;
-                    this.stopName = stops[0].name;
-                } else {
-                    this.stopId = inputValue;
-                    this.stopName = inputValue;
-                }
-            } catch (error) {
-                console.error('Stop lookup error:', error);
-                this.stopId = inputValue;
-                this.stopName = inputValue;
-            }
-        }
-
-        // this board only shows metro (m1) departures - reject anything else here
-        if (!api.isM1Station(this.stopName)) {
-            this.showStatus(`"${inputValue}" is not a valid Metro station`, 'error');
-            this.stopId = null;
-            this.stopName = null;
-            this.resetToEmptyState();
-            return;
-        }
-
-        localStorage.setItem('lastStopId', this.stopId);
-
-        await this.fetchAndDisplay();
-
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-        this.refreshInterval = setInterval(() => this.refresh(), 30000);
-    }
-
-    async refresh() {
-        if (!this.stopId) return;
-        await this.fetchAndDisplay();
-    }
-
     async fetchAndDisplay() {
         this.showStatus('Loading departures...', 'loading');
 
         try {
-            const rawData = await api.getDeparturesRaw(this.stopId);
-            const departures = api.parseDeparturesRaw(rawData);
-            // this board only ever shows metro departures
-            this.allDepartures = departures.filter(dep =>
-                dep.line && dep.line.toLowerCase().includes('metro')
-            );
+            this.allDepartures = await common.fetchMetroDepartures(this.stopId);
 
             this.renderBoard();
             this.displayStationInfo();
@@ -186,25 +73,14 @@ class VerticalBoard {
         } catch (error) {
             console.error('Error:', error);
             this.showStatus('Error loading departures. Check console for details.', 'error');
-            this.platform1HeaderTitle.textContent = 'Platform –';
-            this.platform2HeaderTitle.textContent = 'Platform –';
-            this.platform1NextStop.textContent = '';
-            this.platform2NextStop.textContent = '';
+            this.clearPlatformHeaders();
             this.showNoDepartures(this.platform1List, 'Error loading departures. Please check your API key and stop ID.');
             this.showNoDepartures(this.platform2List, 'Error loading departures. Please check your API key and stop ID.');
         }
     }
 
     displayStationInfo() {
-        if (this.stopId && this.stopName) {
-            this.stationNameEl.textContent = this.stopName;
-            this.stationIdEl.textContent = `(${this.stopId})`;
-            this.stationInfoEl.style.display = 'block';
-        } else if (this.stopId) {
-            this.stationNameEl.textContent = this.stopId;
-            this.stationIdEl.textContent = '';
-            this.stationInfoEl.style.display = 'block';
-        }
+        common.displayStationInfo(this);
     }
 
     // reverts the board to its initial empty state - used when a station turns out not to be metro.
@@ -215,24 +91,35 @@ class VerticalBoard {
             this.refreshInterval = null;
         }
         this.stationInfoEl.style.display = 'none';
-        this.platform1HeaderTitle.textContent = 'Platform –';
-        this.platform2HeaderTitle.textContent = 'Platform –';
-        this.platform1NextStop.textContent = '';
-        this.platform2NextStop.textContent = '';
+        this.clearPlatformHeaders();
         this.showNoDepartures(this.platform1List);
         this.showNoDepartures(this.platform2List);
     }
 
+    // the station is real and on the M1, but the Bankstown extension segment
+    // it's part of isn't carrying passengers yet
+    showLineOpeningSoon() {
+        this.allDepartures = [];
+        this.clearPlatformHeaders();
+        this.showNoDepartures(this.platform1List, 'No services running currently - line opening soon');
+        this.showNoDepartures(this.platform2List, 'No services running currently - line opening soon');
+        this.updateTicker();
+        this.displayStationInfo();
+    }
+
+    clearPlatformHeaders() {
+        this.platform1HeaderTitle.textContent = 'Platform –';
+        this.platform2HeaderTitle.textContent = 'Platform –';
+        this.platform1NextStop.textContent = '';
+        this.platform2NextStop.textContent = '';
+    }
+
     renderBoard() {
-        // group departures by platform, show the two busiest
         // a valid station can still have nothing running right now (e.g. late
         // night) - platforms can't be labelled with no departures to group by, so
         // show the message in the departures area itself rather than a fake shell
         if (this.allDepartures.length === 0) {
-            this.platform1HeaderTitle.textContent = 'Platform –';
-            this.platform2HeaderTitle.textContent = 'Platform –';
-            this.platform1NextStop.textContent = '';
-            this.platform2NextStop.textContent = '';
+            this.clearPlatformHeaders();
             this.showNoDepartures(this.platform1List);
             this.showNoDepartures(this.platform2List);
             this.updateTicker();
@@ -250,19 +137,49 @@ class VerticalBoard {
             (a, b) => platformGroups[b].length - platformGroups[a].length
         );
 
-        const platform1 = sortedPlatforms[0] || 'Unknown';
-        const platform2 = sortedPlatforms[1] || platform1;
+        const realPlatform1 = sortedPlatforms[0];
+        this.renderRealPlatform(this.platform1HeaderTitle, this.platform1NextStop, this.platform1List, realPlatform1, platformGroups[realPlatform1]);
 
-        this.platform1HeaderTitle.textContent = `Platform ${platform1}`;
-        this.platform2HeaderTitle.textContent = `Platform ${platform2}`;
-
-        this.updateNextStop(this.platform1NextStop, platformGroups[platform1]);
-        this.updateNextStop(this.platform2NextStop, platformGroups[platform2]);
-
-        this.renderPlatformRows(this.platform1List, platformGroups[platform1] || []);
-        this.renderPlatformRows(this.platform2List, platformGroups[platform2] || []);
+        if (sortedPlatforms.length >= 2) {
+            const realPlatform2 = sortedPlatforms[1];
+            this.renderRealPlatform(this.platform2HeaderTitle, this.platform2NextStop, this.platform2List, realPlatform2, platformGroups[realPlatform2]);
+        } else {
+            // only one active platform right now (a genuine terminus, or the
+            // other direction runs into the unopened Bankstown extension) -
+            // work out what the other platform should say instead of just
+            // repeating platform 1's data
+            this.renderMissingPlatform(realPlatform1, platformGroups[realPlatform1]);
+        }
 
         this.updateTicker();
+    }
+
+    renderRealPlatform(titleEl, nextStopEl, listEl, platformNumber, departures) {
+        titleEl.textContent = `Platform ${platformNumber}`;
+        this.updateNextStop(nextStopEl, departures);
+        this.renderPlatformRows(listEl, departures);
+    }
+
+    renderMissingPlatform(realPlatformNumber, realDepartures) {
+        const otherPlatformNumber = realPlatformNumber === '2' ? '1' : '2';
+        this.platform2HeaderTitle.textContent = `Platform ${otherPlatformNumber}`;
+
+        const sampleDestination = realDepartures[0] ? realDepartures[0].destination : null;
+        const neighbor = sampleDestination ? api.getOppositeNextStop(this.stopName, sampleDestination) : null;
+
+        if (!neighbor) {
+            // genuine terminus in this direction (e.g. Tallawong) - nothing runs the other way
+            this.platform2NextStop.textContent = '';
+            this.showNoDepartures(this.platform2List, 'No upcoming services');
+        } else if (!api.isM1StationOpen(neighbor)) {
+            // the other direction leads straight into the unopened Bankstown extension
+            this.platform2NextStop.textContent = `Next stop ${neighbor}`;
+            this.showNoDepartures(this.platform2List, 'No services running currently - line opening soon');
+        } else {
+            // an open segment with genuinely no current data - rare, generic fallback
+            this.platform2NextStop.textContent = `Next stop ${neighbor}`;
+            this.showNoDepartures(this.platform2List);
+        }
     }
 
     showNoDepartures(listEl, message = 'No information available. Select a valid Metro station.') {
@@ -343,10 +260,12 @@ class VerticalBoard {
         row.appendChild(main);
 
         // occupancy/time are direct grid children so their widths stay fixed
-        // regardless of how wide the time text is
+        // regardless of how wide the time text is. renderOccupancyIcons can
+        // return '' (no data) - still append a bare div so the 3-column grid
+        // keeps its structure and row-time doesn't shift into the wrong column
         const occupancyEl = document.createElement('div');
         occupancyEl.innerHTML = api.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
-        row.appendChild(occupancyEl.firstElementChild);
+        row.appendChild(occupancyEl.firstElementChild || document.createElement('div'));
 
         const timeEl = document.createElement('div');
         timeEl.className = `row-time ${timeClass} ${blinkClass}`.trim();
@@ -375,9 +294,7 @@ class VerticalBoard {
         main.appendChild(badgeEl);
         row.appendChild(main);
 
-        const occupancyEl = document.createElement('div');
-        occupancyEl.innerHTML = api.renderOccupancyIcons(0);
-        row.appendChild(occupancyEl.firstElementChild);
+        row.appendChild(document.createElement('div'));
 
         const timeEl = document.createElement('div');
         timeEl.className = 'row-time';
@@ -401,8 +318,7 @@ class VerticalBoard {
     }
 
     showStatus(message, type) {
-        this.statusEl.textContent = message;
-        this.statusEl.className = `status ${type}`;
+        common.showStatus(this.statusEl, message, type);
     }
 }
 

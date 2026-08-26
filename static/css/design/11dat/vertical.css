@@ -1,146 +1,5 @@
 /* two mirrored platform sections, portrait board */
 
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-header {
-    background: #16213e;
-    padding: 14px 20px;
-    border-radius: 10px;
-    margin: 10px;
-}
-
-.header-top {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    margin-bottom: 8px;
-}
-
-header h1 {
-    color: var(--white);
-    font-size: 1.5em;
-    margin: 0;
-}
-
-.station-info {
-    margin: 0;
-    font-size: 1em;
-    color: var(--white);
-}
-
-#stationName {
-    font-weight: bold;
-}
-
-#stationId {
-    color: var(--l-gray);
-    margin-left: 4px;
-}
-
-.back-link {
-    display: inline-block;
-    color: var(--white);
-    text-decoration: none;
-    margin: 0;
-    font-size: 1.1em;
-}
-
-.back-link:hover {
-    text-decoration: underline;
-}
-
-.controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-.search-container {
-    flex: 1;
-    min-width: 200px;
-    position: relative;
-}
-
-#stopInput {
-    width: 100%;
-    padding: 10px;
-    background: #0f3460;
-    border: 2px solid var(--white);
-    color: #eee;
-    font-size: 1em;
-    border-radius: 5px;
-}
-
-.suggestions-dropdown {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #0f3460;
-    border: 2px solid var(--white);
-    border-top: none;
-    border-radius: 0 0 5px 5px;
-    max-height: 250px;
-    overflow-y: auto;
-    z-index: 1000;
-}
-
-.suggestion-item {
-    padding: 10px 15px;
-    border-bottom: 1px solid #16213e;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.suggestion-item:hover {
-    background: #16213e;
-}
-
-.stop-name {
-    flex: 1;
-    color: #eee;
-}
-
-.stop-id {
-    color: var(--l-gray);
-    font-size: 0.85em;
-    margin-left: 10px;
-}
-
-button {
-    padding: 10px 20px;
-    background: var(--white);
-    border: none;
-    color: #1a1a2e;
-    font-weight: bold;
-    cursor: pointer;
-    border-radius: 5px;
-    font-size: 1em;
-}
-
-button:hover {
-    background: var(--l-gray);
-}
-
-button:active {
-    transform: scale(0.98);
-}
-
-.status {
-    margin-top: 6px;
-    font-size: 0.9em;
-    color: var(--l-gray);
-    min-height: 20px;
-}
-
 .vertical-board {
     display: flex;
     flex-direction: column;
@@ -308,15 +167,6 @@ button:active {
     color: #bbb;
 }
 
-/* shared marquee mechanism for any scrolling-text container (ticker) */
-.status-text {
-    display: inline-block;
-}
-.scrolling .status-text {
-    padding-left: 100%;
-    animation: marquee 10s linear infinite;
-}
-
 .occupancy-icons {
     display: flex;
     gap: 2px;
@@ -344,29 +194,20 @@ button:active {
 .row-time.major { color: var(--major); }
 .row-time.blink { animation: blink 1s steps(2, start) infinite; }
 
+/* shared marquee mechanism for any scrolling-text container (ticker) */
+.status-text {
+    display: inline-block;
+}
+.scrolling .status-text {
+    padding-left: 100%;
+    animation: marquee 10s linear infinite;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }
 }
-@keyframes blink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0; }
-}
 @keyframes marquee {
     from { transform: translateX(0); }
     to { transform: translateX(-100%); }
-}
-
-/* fills and centers within the platform's departures-list, in place of rows,
-   when a valid station genuinely has nothing running right now */
-.no-departures {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--dark-gray);
-    font-style: italic;
-    padding: 20px;
-    margin: 0;
 }

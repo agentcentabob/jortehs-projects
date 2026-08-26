@@ -342,6 +342,20 @@ header h1 {
     max-width: 280px;
 }
 
+.service-main {
+    min-width: 0;
+}
+
+/* flags that the shown service is the platform's timetable, not a confirmed
+   identification of the vehicle standing there */
+.service-note {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.68em;
+    font-style: italic;
+    color: #7a869e;
+}
+
 /* the signal berth the tracked vehicle is sitting in, under the status text */
 .info-loc {
     font-size: 0.72em;

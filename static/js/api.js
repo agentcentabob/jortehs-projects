@@ -125,6 +125,14 @@ class TfNSWAPI {
         return m1Line.isM1Station(name);
     }
 
+    isM1StationOpen(name) {
+        return m1Line.isM1StationOpen(name);
+    }
+
+    getOppositeNextStop(station, destination) {
+        return m1Line.getOppositeNextStop(station, destination);
+    }
+
     // short display form of a station name ("Tallawong Station, Tallawong" ->
     // "Tallawong") - TfNSW's destination field isn't consistently short, e.g. a
     // terminus's return-direction destination can come back in the full form
@@ -164,6 +172,10 @@ class TfNSWAPI {
 
     isInCentralStationArea(stopId) {
         return centralPlatforms.isInCentralStationArea(stopId);
+    }
+
+    isApproachingPlatform(stopId, platformNumber) {
+        return centralPlatforms.isApproachingPlatform(stopId, platformNumber);
     }
 
     // Sydney Trains route ids are internal sector codes, not line codes. TfNSW
@@ -246,8 +258,11 @@ class TfNSWAPI {
         return Math.round((departure - new Date()) / 60000);
     }
 
-    // 3-icon crowding indicator markup, filled up to level (0-3)
+    // 3-icon crowding indicator markup, filled up to level (0-3). Empty string
+    // when there's no occupancy data at all (level 0), rather than 3 outline
+    // icons that imply "empty train" when it really means "unknown"
     renderOccupancyIcons(level) {
+        if (!level) return '';
         let html = '<div class="occupancy-icons" aria-label="crowding level">';
         for (let i = 1; i <= 3; i++) {
             const filled = level >= i;
