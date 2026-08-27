@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Tactile Bumps</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap">
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/design/11dat/tactile-bumps.css">
 </head>
@@ -71,7 +74,7 @@
                         <span class="key-led led-open"></span>
                         <span class="key-state">Flashing green / blue</span>
                         <button type="button" class="key-demo-btn" data-state="opening" aria-label="Hold the 'doors opening' state"></button>
-                        <p class="key-meaning">Doors opening. Runs for about 5 seconds.</p>
+                        <p class="key-meaning">Doors opening. Runs for about 10 seconds.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-arrived"></span>
@@ -83,7 +86,7 @@
                         <span class="key-led led-closing"></span>
                         <span class="key-state">Flashing red / yellow</span>
                         <button type="button" class="key-demo-btn" data-state="closing" aria-label="Hold the 'doors closing' state"></button>
-                        <p class="key-meaning">Doors closing. Starts 30 seconds after the doors opened, or 30 seconds before the scheduled departure, whichever is later, then runs for 5 seconds.</p>
+                        <p class="key-meaning">Doors closing. Starts shortly before the scheduled departure, or once the doors have been open long enough for the mode, whichever is later, then runs for 5 seconds. A train dwells far longer than a metro or tram, so the wait differs by platform.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-departing"></span>
@@ -128,8 +131,12 @@
                     </div>
                     <div class="info-cell">
                         <span class="info-label">Vehicle status</span>
-                        <strong id="infoStatus">Connecting...</strong>
-                        <span class="info-loc" id="infoLoc"></span>
+                        <!-- the phase changes on its own as the vehicle moves, so it
+                             is announced rather than silently replaced -->
+                        <strong id="infoStatus" aria-live="polite">Connecting...</strong>
+                        <span class="info-vehicle" id="infoVehicle"></span>
+                        <!-- hover or focus for the platform, location and route id -->
+                        <span class="info-loc" id="infoDistance" tabindex="0"></span>
                     </div>
                     <div class="info-cell">
                         <span class="info-label">Indicator showing</span>

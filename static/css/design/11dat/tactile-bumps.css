@@ -1,6 +1,5 @@
-/* --led has to be registered before it can be animated - browsers won't animate an
-   unregistered custom property at all. paired with step-end below, this gives a hard
-   binary flash rather than a fade between the two colours. */
+/* --led must be registered to animate at all (unregistered custom props are silently
+   ignored). paired with step-end below for a hard binary flash, not a fade. */
 @property --led {
     syntax: '<color>';
     inherits: true;
@@ -136,8 +135,7 @@ header h1 {
     overflow: hidden;
 }
 
-/* open track void above the edge - no rails drawn, the focus is the platform.
-   grows to take up any spare height in the tile. */
+/* open track void above the edge, no rails drawn - grows to fill spare tile height */
 .trackside {
     position: relative;
     flex: 1;
@@ -156,8 +154,8 @@ header h1 {
     text-transform: uppercase;
 }
 
-/* negative margins so the edge line runs the full width of the scene box, and no
-   bottom margin so the concrete below butts straight up against it */
+/* negative margins run the edge line the full scene width; no bottom margin so
+   the concrete below butts straight up against it */
 .platform-edge {
     position: relative;
     border-top: 3px solid #ccc;
@@ -177,22 +175,17 @@ header h1 {
 
 /* tactile bump strip */
 
-/* the concrete platform surface - runs solid from the platform edge down to the
-   base of the scene, with the LED rows set into it */
+/* concrete platform surface - solid from the edge to the scene base, LED rows set into it */
 .tactile-strip {
     display: flex;
     flex-direction: column;
     gap: 3px;
     margin: 0 -20px;
-    /* On the real platform the studded strip is fairly narrow with a wide run of
-       plain concrete either side, and more of it towards the edge than behind.
-       Roughly matching those proportions here. */
+    /* real platform: studded strip is narrow, more concrete towards the edge than behind */
     padding: 150px 20px 88px;
-    /* Two concrete tones, like the photos: a paler smoother band along the edge,
-       then the darker main platform paving from the bumps back. The hard stop at
-       150px is the same figure as the padding above, so they move together.
-       Slab joints are sized independently of the LED spacing so the concrete reads
-       as paving rather than as a grid drawn around every light. */
+    /* two tones like the photos - paler band at the edge, darker paving behind. the
+       150px hard stop below matches the padding above, so they move together.
+       slab joints are sized independently of the LED pitch so it reads as paving */
     background-color: #a8a49b;
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.28) 1px, transparent 1px),
@@ -207,8 +200,8 @@ header h1 {
     background-position: 1px 0, 0 0, 0 1px, 0 0, 0 0;
 }
 
-/* LED lenses set into the concrete. no per-dot elements - the whole row is one
-   tiled gradient, so row height and background-size must stay in step. */
+/* LED lenses set into the concrete - no per-dot elements, one tiled gradient per
+   row, so height and background-size must stay in step */
 .bump-row {
     height: 27px;
     --led: var(--yellow);
@@ -266,9 +259,8 @@ header h1 {
     animation: none;
 }
 
-/* step-end holds each value until the next keyframe, so the colour jumps rather
-   than fading. literal colours here - keyframe values on a registered property
-   resolve more reliably than nested var() references. */
+/* step-end holds each value until the next keyframe (jump, not fade). literal
+   colours - keyframes on a registered property resolve better than nested var() */
 @keyframes flash-alert {
     0% { --led: #FF1717; }
     50% { --led: #FF6A00; }
@@ -364,16 +356,36 @@ header h1 {
     margin-top: 3px;
 }
 
+/* marks the distance readout as carrying more detail behind it */
+.info-loc.has-detail {
+    cursor: help;
+    text-decoration: underline dotted rgba(159, 176, 201, 0.5);
+    text-underline-offset: 3px;
+    width: fit-content;
+}
+
+.info-loc.has-detail:focus-visible {
+    outline: 2px solid var(--metro, #00a0a0);
+    outline-offset: 2px;
+}
+
+/* the service the lights are reacting to - same detail the map hover gives, since
+   the vehicle it names is the one the whole panel is about */
+.info-vehicle {
+    font-size: 0.78em;
+    color: #9fb0c9;
+    margin-top: 4px;
+}
+
 .tip-service {
     font-size: 1.08em;
     font-weight: 600;
 }
 
-.tip-detail {
+.tip-approach {
     font-size: 0.92em;
-    font-style: italic;
     color: var(--l-gray);
-    margin-top: 2px;
+    margin-top: 3px;
 }
 
 .tip-location {
@@ -548,7 +560,6 @@ header h1 {
 
 /* key */
 
-
 .key-demo-btn {
     background: #16213e;
     color: var(--white);
@@ -570,8 +581,8 @@ header h1 {
     background: #223154;
 }
 
-/* .active = this is the state on screen right now, whether live or held. muted
-   so it reads as "currently showing" rather than as a button to press. */
+/* .active = state on screen right now, live or held - muted so it reads as
+   "currently showing", not "press me" */
 .key-demo-btn.active {
     background: var(--bus);
     border-color: var(--bus);

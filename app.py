@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, Response
 import requests
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+import threading
 import time
 import pytz
 import os
@@ -47,6 +48,31 @@ OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 OSM_USER_AGENT = 'virtualdpb-tfnsw/1.0 (student project; local use)'
 _tile_cache = {}
 TILE_CACHE_MAX = 500
+
+# per-trip upcoming stops - names platform-level stop ids, the only published way
+# to know a service's arrival platform ahead of time. changes slowly, cached longer
+# than the position feeds. same mixed v1/v2 split as VEHICLE_FEEDS, and nswtrains
+# has no trip update feed at all.
+TRIP_UPDATE_FEEDS = {
+    'sydneytrains': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/sydneytrains',
+    'metro': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/metro',
+    'lightrail_innerwest': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/lightrail/innerwest',
+    'lightrail_cbdse': 'https://api.transport.nsw.gov.au/v1/gtfs/realtime/lightrail/cbdandsoutheast',
+}
+_trip_update_cache = {}
+TRIP_UPDATE_CACHE_SECONDS = 20
+
+# stop id -> name, resolved through the trip planner. Only metro and light rail
+# need this: their feeds name a numeric stop id and nothing else, where heavy rail
+# spells the station out in its signal berth string. A lookup takes about 3s, so
+# they are resolved in the background and the cache is never expired - stop names
+# don't change while the server is up.
+_stop_name_cache = {}
+_stop_name_pending = set()
+_stop_name_lock = threading.Lock()
+_stop_name_pool = ThreadPoolExecutor(max_workers=6)
+STOP_NAME_MAX_IDS = 60      # per request
+STOP_NAME_MAX_PENDING = 40  # in flight at once, so one bad batch can't flood TfNSW
 
 
 @app.route("/")
@@ -188,6 +214,10 @@ def fetch_feed(feed_name):
             'stopId': v.stop_id if v.HasField('stop_id') else None,
             # only populated on metro/lightrail/nswtrains, never on sydneytrains
             'status': VEHICLE_STOP_STATUS.get(v.current_status) if v.HasField('current_status') else None,
+            # position within the trip, matched against a trip update's stop_sequence.
+            # lags the GPS by a stop fairly often, so treat it as a floor rather than
+            # the last word on where the vehicle has got to
+            'stopSequence': v.current_stop_sequence if v.HasField('current_stop_sequence') else None,
             'routeId': v.trip.route_id if v.HasField('trip') else None,
             'tripId': v.trip.trip_id if v.HasField('trip') else None,
             # used to follow one train from a platform to its next stop
@@ -234,6 +264,122 @@ def get_vehicle_positions():
                 errors[feed_name] = str(e)
 
     return jsonify({'vehicles': vehicles, 'errors': errors})
+
+
+def fetch_trip_updates(feed_name):
+    """fetches and decodes one gtfs-realtime trip update feed into trip_id -> stops"""
+    cached = _trip_update_cache.get(feed_name)
+    if cached and time.time() - cached['at'] < TRIP_UPDATE_CACHE_SECONDS:
+        return cached['trips']
+
+    response = requests.get(
+        TRIP_UPDATE_FEEDS[feed_name],
+        headers={'Authorization': f'apikey {API_KEY}'},
+        timeout=REQUEST_TIMEOUT
+    )
+    response.raise_for_status()
+
+    feed = gtfs_realtime_pb2.FeedMessage()
+    feed.ParseFromString(response.content)
+
+    trips = {}
+    for entity in feed.entity:
+        if not entity.HasField('trip_update'):
+            continue
+        update = entity.trip_update
+        stops = []
+        for stop in update.stop_time_update:
+            # plenty of these carry no absolute time, only a delay
+            arrival = stop.arrival.time if stop.HasField('arrival') else 0
+            departure = stop.departure.time if stop.HasField('departure') else 0
+            stops.append({
+                'stopId': stop.stop_id,
+                'sequence': stop.stop_sequence if stop.HasField('stop_sequence') else None,
+                'time': arrival or departure or None
+            })
+        if update.trip.trip_id:
+            trips[update.trip.trip_id] = stops
+
+    _trip_update_cache[feed_name] = {'at': time.time(), 'trips': trips}
+    return trips
+
+
+@app.route('/api/trip-updates', methods=['GET'])
+def get_trip_updates():
+    """per-trip upcoming stops - trip_id joins directly to the vehicle positions feed"""
+    requested = [f.strip() for f in request.args.get('feeds', '').split(',') if f.strip()]
+    if not requested:
+        requested = ['sydneytrains']
+
+    unknown = [f for f in requested if f not in TRIP_UPDATE_FEEDS]
+    if unknown:
+        return jsonify({'error': f'unknown feeds: {unknown}',
+                        'available': list(TRIP_UPDATE_FEEDS)}), 400
+
+    trips = {}
+    errors = {}
+
+    # trip ids are unique across modes (each feed uses its own format), so merging
+    # them into one map is safe and saves the caller having to know which is which
+    with ThreadPoolExecutor(max_workers=len(requested)) as pool:
+        futures = {pool.submit(fetch_trip_updates, name): name for name in requested}
+        for future in futures:
+            feed_name = futures[future]
+            try:
+                trips.update(future.result())
+            except requests.exceptions.RequestException as e:
+                errors[feed_name] = str(e)
+
+    return jsonify({'trips': trips, 'errors': errors})
+
+
+def resolve_stop_name(stop_id):
+    """looks one stop id up through stop_finder and caches whatever comes back"""
+    try:
+        response = requests.get(
+            f'{API_BASE_URL}/stop_finder',
+            params={
+                'outputFormat': 'rapidJSON',
+                'type_sf': 'any',
+                'name_sf': stop_id,
+                'TfNSWSF': 'true'
+            },
+            headers={'Authorization': f'apikey {API_KEY}'},
+            timeout=REQUEST_TIMEOUT
+        )
+        response.raise_for_status()
+        locations = response.json().get('locations') or []
+        top = locations[0] if locations else {}
+        # the short form is the one worth showing; a handful of ids resolve to
+        # nothing at all, and those get cached as blank so we stop asking
+        _stop_name_cache[stop_id] = top.get('disassembledName') or top.get('name') or ''
+    except (requests.exceptions.RequestException, ValueError):
+        pass  # leave it unresolved - the next request will queue it again
+    finally:
+        with _stop_name_lock:
+            _stop_name_pending.discard(stop_id)
+
+
+@app.route('/api/stop-names', methods=['GET'])
+def get_stop_names():
+    """names for numeric stop ids, resolved in the background and cached forever"""
+    ids = [i.strip() for i in request.args.get('ids', '').split(',') if i.strip()]
+    ids = ids[:STOP_NAME_MAX_IDS]
+
+    names = {i: _stop_name_cache[i] for i in ids if i in _stop_name_cache}
+
+    # anything still unknown gets queued. the caller polls anyway, so the names
+    # turn up a few seconds later rather than holding this response open
+    with _stop_name_lock:
+        room = STOP_NAME_MAX_PENDING - len(_stop_name_pending)
+        queue = [i for i in ids
+                 if i not in _stop_name_cache and i not in _stop_name_pending][:max(room, 0)]
+        _stop_name_pending.update(queue)
+
+    for stop_id in queue:
+        _stop_name_pool.submit(resolve_stop_name, stop_id)
+
+    return jsonify({'names': names, 'pending': len(queue)})
 
 
 @app.route('/api/map-tile', methods=['GET'])

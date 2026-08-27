@@ -35,10 +35,9 @@ class TfNSWAPI {
         }
     }
 
-    // live gtfs-realtime vehicle positions, merged across the named feeds
-    // (see VEHICLE_FEEDS in app.py for valid names).
-    // returns { vehicles, errors } - a single feed can fail while the rest succeed,
-    // so callers should check errors rather than assume a short list means quiet.
+    // live gtfs-realtime vehicle positions, merged across the named feeds (see
+    // VEHICLE_FEEDS in app.py). { vehicles, errors } - check errors, don't assume
+    // a short list means a quiet feed
     async getVehiclePositions(feeds) {
         const list = Array.isArray(feeds) ? feeds : [feeds];
         try {
@@ -54,6 +53,45 @@ class TfNSWAPI {
         } catch (error) {
             console.error('Error fetching vehicle positions:', error);
             throw error;
+        }
+    }
+
+    // upcoming stops per trip, merged across the named feeds (see TRIP_UPDATE_FEEDS
+    // in app.py). trip_id joins to getVehiclePositions(), and this is the only
+    // published way to know a service's arrival platform ahead of time
+    async getTripUpdates(feeds) {
+        const list = Array.isArray(feeds) ? feeds : (feeds ? [feeds] : []);
+        const query = list.length ? `?feeds=${encodeURIComponent(list.join(','))}` : '';
+        try {
+            const response = await fetch(`${this.backendUrl}/trip-updates${query}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            const data = await response.json();
+            return data.trips || {};
+        } catch (error) {
+            console.error('Error fetching trip updates:', error);
+            throw error;
+        }
+    }
+
+    // names for numeric stop ids. resolving one takes a few seconds, so the backend
+    // answers from its cache and looks the rest up in the background - expect a
+    // partial map on the first ask and the remainder on the next
+    async getStopNames(ids) {
+        if (!ids || !ids.length) return { names: {}, pending: 0 };
+        try {
+            const response = await fetch(`${this.backendUrl}/stop-names?ids=${encodeURIComponent(ids.join(','))}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+            const data = await response.json();
+            // pending counts what the backend has gone away to resolve - ask again
+            // shortly rather than waiting for the next poll
+            return { names: data.names || {}, pending: data.pending || 0 };
+        } catch (error) {
+            console.error('Error fetching stop names:', error);
+            return { names: {}, pending: 0 };
         }
     }
 
@@ -154,8 +192,8 @@ class TfNSWAPI {
         return centralPlatforms.matchesPlatform(vehicle, platform);
     }
 
-    vehicleIsAtAnotherStation(vehicle, platform) {
-        return centralPlatforms.isAtAnotherStation(vehicle, platform);
+    getCentralPlatformByStopId(stopId) {
+        return centralPlatforms.getPlatformByStopId(stopId);
     }
 
     getCentralStationBounds() {
@@ -178,13 +216,10 @@ class TfNSWAPI {
         return centralPlatforms.isApproachingPlatform(stopId, platformNumber);
     }
 
-    // Sydney Trains route ids are internal sector codes, not line codes. TfNSW
-    // doesn't publish what each sector means, so this was worked out by checking
-    // where each sector's trains actually go: APS only ever runs to Campbelltown,
-    // Macarthur and Revesby, which is T8. Same idea for the rest. It matches
-    // reality today but nothing guarantees it stays that way.
-    // CTY (Brisbane/Canberra/Perth) and RTTA (non-timetabled) have no line and are
-    // left unlabelled on purpose.
+    // sydney trains route ids are internal sector codes, not line codes - not
+    // published by tfnsw, worked out by checking each sector's real destinations
+    // (APS only ever runs Campbelltown/Macarthur/Revesby = T8, etc). CTY/RTTA have
+    // no line and stay unlabelled on purpose.
     static SECTOR_LINES = {
         APS: 'T8', ESI: 'T4', NSN: 'T1', NTH: 'T9', WST: 'T1',
         CMB: 'T5', OLY: 'T7', IWL: 'T2',

@@ -1,46 +1,62 @@
-// Digital Tactile Bumps - platform-edge indicators driven by live vehicle positions.
-// Hardcoded to Central Station; the platform picker chooses which platform's data
-// drives the animation. Platform/stop-id data lives in centralPlatforms.js.
+// platform-edge indicators driven by live vehicle positions. hardcoded to
+// central station - picker selects platform only. platform data: centralPlatforms.js
 
 import api from '../../api.js';
 
 const POLL_MS = 12000;      // vehicle feeds refresh every ~10-30s upstream
-const TICK_MS = 250;        // re-derive the phase often enough for the fixed timings to land
+const TICK_MS = 250;        // re-derive phase often enough for the fixed timings to land
 
-// The dwell hangs off the one real event these feeds give us: the train coming to
-// a stand, worked out by watching its position between polls. Everything after
-// that is a fixed timer, because no TfNSW API reports door state at all.
+// the dwell hangs off the one real event the feeds give us - train coming to a
+// stand, watched between polls. everything after is a fixed timer: no tfnsw api
+// reports door state
+const CLOSING_MS = 5000;             // doors take ~5s to close
+const DEPARTING_MAX_MS = 120000;     // safety cap: vehicle still in feed but never left
+const DEPARTING_LOST_MS = 45000;     // shorter cap: vehicle vanished from feed
+// anything takes a few seconds to physically clear a platform, and positions run
+// about a minute stale on top of that, so the feed saying "gone" the instant the
+// doors shut isn't evidence it has. Without this the departing lights could show
+// for two seconds and be missed entirely.
+const DEPARTING_MIN_MS = 6000;
+
+// The dwell has to be modelled per mode. A train sits at Central for a minute or
+// more, a metro turns round in about 45 seconds and a tram in less, so a single
+// 60s doors-open floor held metro and light rail doors open long after the real
+// ones had shut.
 //
-const ARRIVING_AT_PLATFORM_MS = 10000;  // keeps flashing 10s after it pulls in
-const OPENING_MS = 10000;            // doors-opening flash runs ~10s
-const DOORS_OPEN_MIN_MS = 60000;     // doors stay open at least 60s after opening
-const CLOSE_BEFORE_DEPARTURE_MS = 30000; // ...or until :30 of the minute before departure
-const CLOSING_MS = 5000;             // doors take ~5s to finish closing
-// departing normally ends when the vehicle is seen at its next stop; this only
-// catches the case where it drops out of the feed entirely
-const DEPARTING_MAX_MS = 120000;
-// shorter cap for when the vehicle vanishes from the feed altogether
-const DEPARTING_LOST_MS = 45000;
+// The two distances only apply where there are no signal berths to read instead.
+// Heavy rail has them and they are a far better signal, so it uses null for both:
+// approachingM would otherwise light "arriving" for any train that happens to be
+// near Central, and clearOfPlatformM is what tells metro and light rail the vehicle
+// has actually gone - without it "departing" ran the full safety cap every time.
+// doorsOpenMax caps the whole thing. The scheduled departure can't be confirmed as
+// belonging to the vehicle actually standing there (run numbers change at Central),
+// so a tram with doors open and a timetabled departure five minutes off would
+// otherwise sit on "doors open" for the whole five minutes.
+// Metro's dwell was measured off the live feed rather than guessed: two trains at
+// Central both reported STOPPED_AT across 24-25s, so the whole sequence is built to
+// land at about 30s. Heavy rail keeps the original, longer model.
+const MODE_TIMINGS = {
+    'train':      { arrivingHold: 10000, opening: 10000, doorsOpenMin: 60000, doorsOpenMax: 180000, closeBefore: 30000, approachingM: null, clearOfPlatformM: null },
+    'metro':      { arrivingHold: 4000,  opening: 6000,  doorsOpenMin: 15000, doorsOpenMax: 45000,  closeBefore: 12000, approachingM: 300,  clearOfPlatformM: 200 },
+    'light rail': { arrivingHold: 3000,  opening: 5000,  doorsOpenMin: 12000, doorsOpenMax: 40000,  closeBefore: 10000, approachingM: 150,  clearOfPlatformM: 100 }
+};
 
-// A vehicle only counts as being at, or heading for, this platform if its position
-// is recent. Without this a train that reported a Central berth hours ago kept the
-// platform showing a train that had long gone.
-const PRESENCE_MAX_AGE_S = 120;
+// feed entries linger long after a train's gone (one was 4.8h stale) - ignore
+// anything older than this everywhere: lights, map, loc readout
+const MAX_POSITION_AGE_S = 120;
 
-// Anything older than this is dropped completely - it tells us nothing about where
-// the vehicle is now, so it shouldn't sit on the map either.
-const MAP_MAX_AGE_S = 180;
-
-// how long the berth can go unreported before the dwell is treated as finished
-const PLATFORM_ABSENCE_GRACE_MS = 20000;
-
-// how far a vehicle must move between polls before we trust a derived heading
-const MIN_MOVE_FOR_BEARING_M = 25;
+const PLATFORM_ABSENCE_GRACE_MS = 20000; // berth can go unreported this long before dwell ends
+const MIN_MOVE_FOR_BEARING_M = 25;       // min movement between polls to trust a derived heading
+const AT_PLATFORM_M = 75;                // close enough to call it "at" when the feed won't say so
+// Looser check for when the trip's timing is the signal rather than the feed's
+// status. A compromise: a metro measured 118m from the platform coordinate while
+// demonstrably stopped at it, so this has to clear that, but every metre added is a
+// metre where a late train could be called "arrived" while still rolling in.
+const AT_PLATFORM_BY_TIME_M = 200;
 
 const DEFAULT_PLATFORM = 'p16';
 
-// phases where the vehicle is standing at the platform, so the countdown to the
-// next departure is really this vehicle's own departure
+// phases where the vehicle is at the platform - countdown is this vehicle's own departure
 const AT_PLATFORM_PHASES = ['opening', 'arrived', 'closing'];
 
 const DEMO_STATES = ['idle', 'arriving', 'opening', 'arrived', 'closing', 'departing'];
@@ -56,6 +72,9 @@ const ALL_FEEDS = [
     'sydneytrains', 'metro', 'lightrail_innerwest', 'lightrail_cbdse', 'nswtrains'
 ];
 
+// same list minus nswtrains, which publishes no trip update feed
+const TRIP_FEEDS = ['sydneytrains', 'metro', 'lightrail_innerwest', 'lightrail_cbdse'];
+
 // two views of the same data: a wide one covering the area around Central, and a
 // closer one on the station itself
 const MAIN_VIEW = { spanM: 2000, width: 900, height: 620, scaleBarM: 250 };
@@ -68,7 +87,8 @@ const infoTime = document.getElementById('infoTime');
 const infoCountdown = document.getElementById('infoCountdown');
 const infoStatus = document.getElementById('infoStatus');
 const infoLights = document.getElementById('infoLights');
-const infoLoc = document.getElementById('infoLoc');
+const infoVehicle = document.getElementById('infoVehicle');
+const infoDistance = document.getElementById('infoDistance');
 const infoServiceNote = document.getElementById('infoServiceNote');
 const demoButtons = document.querySelectorAll('.key-demo-btn');
 const mapIntro = document.getElementById('mapIntro');
@@ -78,6 +98,9 @@ let platform = null;
 let departures = [];
 let vehicles = [];
 let feedErrors = {};
+// tripId -> upcoming stops, only for saying which Central platform a train is
+// heading for - never drives the lights
+let tripUpdates = {};
 let lastError = null;
 
 let phase = 'idle';
@@ -92,6 +115,22 @@ let departingSince = null;
 let relevantVehicleKey = null;
 // this dwell's own departure, so the panel doesn't jump to the next service
 let dwellDeparture = null;
+// true when that row was matched to the vehicle rather than assumed from the top
+// of the list - which is what lets the "not confirmed" caveat come off
+let dwellDepartureMatched = false;
+// set when the platform is picked, so a train already sitting there isn't shown
+// arriving all over again
+let freshSelection = false;
+// true when the dwell was already under way before we started watching
+let joinedMidDwell = false;
+// The vehicle that just finished a dwell here. For a while after pulling out it can
+// still name this platform as its stop while sitting inside the approach radius -
+// seen 83m out and still reporting Central - which otherwise reads as a fresh
+// arrival seconds after it left. Keyed to the vehicle, so a following service is
+// unaffected.
+let justDepartedKey = null;
+let justDepartedAt = null;
+const REARRIVAL_BLOCK_MS = 90000;
 
 let liveMode = true;
 let isLoading = false;
@@ -102,6 +141,12 @@ let insetMap = null;
 // last known position per vehicle, used to work out a heading for feeds that
 // don't send one (sydneytrains never does)
 const lastSeenPositions = new Map();
+
+// stop id -> name, filled in as the backend resolves them. metro and light rail
+// report a bare number where heavy rail spells the station out in its berth string
+const stopNames = new Map();
+const STOP_NAME_RETRY_MS = 2500;
+let stopNameRetry = null;
 
 let pollTimer = null;
 let tickTimer = null;
@@ -140,6 +185,11 @@ function nounCapitalised() {
     return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
+// dwell lengths and distances for the selected platform's mode
+function timings() {
+    return MODE_TIMINGS[noun()] || MODE_TIMINGS.train;
+}
+
 // where the vehicle is, plus what the doors are doing once it's stopped. The
 // countdown lives with the next service and the light pattern has its own row.
 function vehicleStatusText(p) {
@@ -174,8 +224,15 @@ function departureTimeOf(dep) {
     return dep.departureTimeEstimated || dep.departureTimePlanned || dep.departureTime;
 }
 
+// the departure the board is actually showing. While a vehicle is standing at the
+// platform that's its own departure, not whatever is now top of the list - the
+// countdown has to agree with the time printed beside it
+function shownDeparture() {
+    return dwellDeparture || departures[0] || null;
+}
+
 function nextDepartureAt() {
-    const next = departures[0];
+    const next = shownDeparture();
     if (!next) return null;
     const time = new Date(departureTimeOf(next));
     return isNaN(time.getTime()) ? null : time.getTime();
@@ -190,8 +247,12 @@ function vehicleKey(vehicle) {
     return vehicle.vehicleId || vehicle.tripId || null;
 }
 
-// rough metres between two points. Good enough over a few hundred metres - no need
-// for proper great-circle maths at this scale.
+function metresFromPlatform(vehicle, target) {
+    if (!target || !target.coord || typeof vehicle.lat !== 'number') return null;
+    return metresBetween(vehicle.lat, vehicle.lon, target.coord[0], target.coord[1]);
+}
+
+// rough metres between two points - good enough at this scale, no need for great-circle maths
 function metresBetween(lat1, lon1, lat2, lon2) {
     return Math.hypot((lat1 - lat2) * 111000, (lon1 - lon2) * 92500);
 }
@@ -203,24 +264,44 @@ function positionAge(vehicle) {
 
 // vehicles recent enough to draw on the map
 function liveVehicles() {
-    return vehicles.filter(v => positionAge(v) <= MAP_MAX_AGE_S);
+    return vehicles.filter(v => positionAge(v) <= MAX_POSITION_AGE_S);
 }
 
 // metro and light rail send a heading; sydneytrains never does, so for those we
 // compare against where the vehicle was last poll and work it out ourselves
+// compass bearing from one point to another, 0 = north
+function bearingBetween(lat1, lon1, lat2, lon2) {
+    const north = lat2 - lat1;
+    const east = (lon2 - lon1) * Math.cos(CENTRAL.lat * Math.PI / 180);
+    return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+}
+
 function headingFor(vehicle) {
     if (typeof vehicle.bearing === 'number') return vehicle.bearing;
 
     const key = vehicleKey(vehicle);
     const previous = key ? lastSeenPositions.get(key) : null;
-    if (!previous || typeof vehicle.lat !== 'number') return null;
 
-    const moved = metresBetween(vehicle.lat, vehicle.lon, previous.lat, previous.lon);
-    if (moved < MIN_MOVE_FOR_BEARING_M) return previous.heading ?? null;
+    if (previous && typeof vehicle.lat === 'number') {
+        const moved = metresBetween(vehicle.lat, vehicle.lon, previous.lat, previous.lon);
+        if (moved >= MIN_MOVE_FOR_BEARING_M) {
+            return bearingBetween(previous.lat, previous.lon, vehicle.lat, vehicle.lon);
+        }
+        if (previous.heading !== null && previous.heading !== undefined) {
+            return previous.heading;
+        }
+    }
 
-    const north = vehicle.lat - previous.lat;
-    const east = (vehicle.lon - previous.lon) * Math.cos(CENTRAL.lat * Math.PI / 180);
-    return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+    // Nothing to compare against yet. sydneytrains sends no bearing, so its arrows
+    // would otherwise stay blank until a second poll has been and gone - point it
+    // at the platform its trip says it is heading for instead.
+    const next = upcomingCentralStop(vehicle);
+    if (next && next.platform.coord && typeof vehicle.lat === 'number') {
+        return bearingBetween(
+            vehicle.lat, vehicle.lon, next.platform.coord[0], next.platform.coord[1]
+        );
+    }
+    return null;
 }
 
 // keeps the last position per vehicle so the next poll can derive a heading
@@ -240,8 +321,7 @@ function rememberPositions() {
             return;
         }
 
-        // a repeated position with the same timestamp is the same old reading, so
-        // there is nothing new to learn from it
+        // same timestamp = same old reading, nothing new to learn
         if (v.timestamp && previous.timestamp && v.timestamp === previous.timestamp) return;
 
         const moved = metresBetween(v.lat, v.lon, previous.lat, previous.lon);
@@ -253,8 +333,7 @@ function rememberPositions() {
         });
     });
 
-    // drop anything no longer in the feed, or this grows for as long as the page
-    // is left open
+    // drop anything no longer in the feed, or this leaks for as long as the page is open
     lastSeenPositions.forEach((_, key) => {
         if (!seen.has(key)) lastSeenPositions.delete(key);
     });
@@ -265,6 +344,26 @@ function primaryVehicle() {
     return findRelevantVehicle().vehicle;
 }
 
+// Close enough that a metro or tram counts as arriving. Heavy rail uses its run-in
+// berth instead, which says the same thing far more reliably. The radii are set to
+// light up roughly 30 seconds out: a metro covers 430m in about 50s, and warning a
+// full minute ahead is the sort of thing people learn to ignore.
+function withinApproach(vehicle) {
+    const limit = timings().approachingM;
+    if (!limit) return false;
+    const away = metresFromPlatform(vehicle, platform);
+    return away !== null && away <= limit;
+}
+
+// has it pulled clear? a berth answers this for heavy rail; for metro and light
+// rail there are no berths, so it comes down to distance
+function clearOfPlatform(vehicle) {
+    const limit = timings().clearOfPlatformM;
+    if (!limit) return false;
+    const away = metresFromPlatform(vehicle, platform);
+    return away !== null && away > limit;
+}
+
 function resetDwell() {
     arrivedAt = null;
     doorsCloseAt = null;
@@ -272,61 +371,107 @@ function resetDwell() {
     lastSeenAtPlatform = null;
     relevantVehicleKey = null;
     dwellDeparture = null;
+    dwellDepartureMatched = false;
+    joinedMidDwell = false;
 }
 
-// The one vehicle this platform's lights are about, and where it is relative to
-// the platform. Everything downstream - phase, map highlight, the Loc readout -
-// uses this, so they can never disagree.
+// the one vehicle this platform's lights are about, and where it is - phase, map
+// highlight and the loc readout all use this so they can't disagree
 function findRelevantVehicle() {
-    const fresh = vehicles.filter(v => positionAge(v) <= PRESENCE_MAX_AGE_S);
+    const settling = justDepartedKey !== null
+        && Date.now() - justDepartedAt < REARRIVAL_BLOCK_MS;
+    const fresh = liveVehicles()
+        .filter(v => !(settling && vehicleKey(v) === justDepartedKey));
     const mine = fresh.filter(v => api.vehicleMatchesPlatform(v, platform));
 
-    // sitting in the platform berth. heavy rail sends no status, so a berth match
-    // on its own means it is here.
-    const atPlatform = mine.find(v => v.status === 'STOPPED_AT' || !v.status);
+    // in the berth - heavy rail sends no status, so a berth match alone means it's
+    // here. isStandingAt covers the Chalmers Street feed, which never says STOPPED_AT
+    const atPlatform = mine.find(v => isStandingAt(v, platform) || !v.status);
     if (atPlatform) return { vehicle: atPlatform, where: 'platform' };
 
-    // metro and light rail say outright when they are pulling in
+    // metro and light rail say outright when pulling in, where they say it at all
     const incoming = mine.find(v => v.status === 'INCOMING_AT');
     if (incoming) return { vehicle: incoming, where: 'approach' };
 
-    // heavy rail: sitting in the berth immediately before this platform
+    // heavy rail: sitting in the run-in berth just before this platform
     if (platform.berthNumber !== null) {
         const runIn = fresh.find(v =>
             api.isApproachingPlatform(v.stopId, platform.berthNumber));
         if (runIn) return { vehicle: runIn, where: 'approach' };
     }
 
-    // still following the one that just pulled out
+    // Everything above rests on the vehicle's own stop id, and for metro and light
+    // rail that names the station it last left right up until it stops here - a
+    // metro 11m from platform 26 still reported Waterloo. So a stop-id match only
+    // fires once it has already arrived, which is why the lights never showed one
+    // approaching. The trip update names the booked platform correctly from 400m+
+    // out, so that is what approach detection actually runs on.
+    const booked = bookedForPlatform(fresh);
+    const nearing = booked.filter(withinApproach);
+    if (nearing.length) return { vehicle: closestToPlatform(nearing), where: 'approach' };
+
+    // still following the one that just left
     if (relevantVehicleKey) {
         const leaving = vehicles.find(v => vehicleKey(v) === relevantVehicleKey);
-        if (leaving && positionAge(leaving) <= PRESENCE_MAX_AGE_S) {
+        if (leaving && positionAge(leaving) <= MAX_POSITION_AGE_S) {
             return { vehicle: leaving, where: 'leaving' };
         }
     }
+
+    // nothing here or close by, but the trip updates may still name the next one
+    // booked in. Too far off to light anything up - this only gives the panel
+    // something to say, so the vehicle details aren't blank until it pulls in.
+    if (booked.length) return { vehicle: closestToPlatform(booked), where: 'inbound' };
+
     return { vehicle: null, where: 'none' };
 }
 
-// The sequence, start to finish:
-//   run-in berth            -> arriving
-//   reaches the platform    -> arriving for another 10s
-//   then                    -> doors opening (10s)
-//   then                    -> doors open, until 30s before departure or 60s
-//   then                    -> doors closing (5s), then departing
-//   clear of Central        -> idle
+// vehicles the trip updates say are booked into this platform
+function bookedForPlatform(list) {
+    return list.filter(v => {
+        const next = upcomingCentralStop(v);
+        return next && next.platform.id === platform.id;
+    });
+}
+
+function closestToPlatform(list) {
+    return list.reduce((best, v) => {
+        const away = metresFromPlatform(v, platform);
+        if (away === null) return best;
+        const bestAway = best === null ? Infinity : metresFromPlatform(best, platform);
+        return away < bestAway ? v : best;
+    }, null) || list[0];
+}
+
+// sequence: run-in berth -> arriving -> (at platform) arriving 10s more -> doors
+// opening 10s -> doors open until 30s before departure or 60s, whichever later ->
+// doors closing 5s -> departing -> clear of Central -> idle
 function derivePhase() {
     const now = Date.now();
     const { vehicle, where } = findRelevantVehicle();
-    if (vehicle) relevantVehicleKey = vehicleKey(vehicle);
+    // an inbound vehicle is only being named for the panel, not followed
+    if (vehicle && where !== 'inbound') relevantVehicleKey = vehicleKey(vehicle);
+
+    // only meaningful once there's actually data to judge
+    const justSelected = freshSelection && vehicles.length > 0;
+    if (vehicles.length > 0) freshSelection = false;
 
     if (where === 'platform') {
         lastSeenAtPlatform = now;
         if (arrivedAt === null) {
-            arrivedAt = now;
+            // already standing there when picked - we never saw it arrive, so
+            // start at doors-open rather than fake-watching it pull in
+            joinedMidDwell = justSelected;
+            arrivedAt = justSelected
+                ? now - (timings().arrivingHold + timings().opening)
+                : now;
             doorsCloseAt = null;
             departingSince = null;
-            // this train's own departure, so the panel doesn't jump mid-dwell
-            dwellDeparture = departures[0] || null;
+
+            // pick this vehicle's own row out of the departure list where we can
+            const matched = departureForVehicle(vehicle);
+            dwellDeparture = matched || departures[0] || null;
+            dwellDepartureMatched = Boolean(matched);
         }
     }
 
@@ -336,18 +481,26 @@ function derivePhase() {
 
     if (inDwell) {
         const since = now - arrivedAt;
-        if (since < ARRIVING_AT_PLATFORM_MS) return 'arriving';
-        if (since < ARRIVING_AT_PLATFORM_MS + OPENING_MS) return 'opening';
+        if (since < timings().arrivingHold) return 'arriving';
+        if (since < timings().arrivingHold + timings().opening) return 'opening';
 
-        // worked out once and kept. Recalculating it each tick meant a delayed
-        // train's departure dropped off the list and the doors sprang back open.
+        // worked out once and kept - recomputing each tick let a delayed train's
+        // departure drop off the list and the doors spring back open
         if (doorsCloseAt === null) {
-            const doorsOpenedAt = arrivedAt + ARRIVING_AT_PLATFORM_MS + OPENING_MS;
+            const doorsOpenedAt = arrivedAt + timings().arrivingHold + timings().opening;
             const departureAt = nextDepartureAt();
-            doorsCloseAt = Math.max(
-                doorsOpenedAt + DOORS_OPEN_MIN_MS,
-                departureAt === null ? 0 : departureAt - CLOSE_BEFORE_DEPARTURE_MS
-            );
+            const timetabled = departureAt === null
+                ? 0
+                : departureAt - timings().closeBefore;
+
+            // the floor assumes we watched it pull in. joining mid-dwell means we
+            // don't know how long it's been sitting there, so use the timetable
+            // instead - otherwise a near-departure train gets its doors held open
+            const target = joinedMidDwell && timetabled > 0
+                ? timetabled
+                : Math.max(doorsOpenedAt + timings().doorsOpenMin, timetabled);
+
+            doorsCloseAt = Math.min(target, doorsOpenedAt + timings().doorsOpenMax);
         }
 
         if (now < doorsCloseAt) return 'arrived';
@@ -356,7 +509,7 @@ function derivePhase() {
         return 'departing';
     }
 
-    // it has pulled out of the platform berth
+    // pulled out of the platform berth
     if (arrivedAt !== null) {
         arrivedAt = null;
         doorsCloseAt = null;
@@ -365,15 +518,22 @@ function derivePhase() {
 
     if (departingSince !== null) {
         const elapsed = now - departingSince;
-        // A stale position kept reporting a berth the train had long left, which
-        // held the departing indicator on well after it had gone.
-        const fresh = vehicle && positionAge(vehicle) <= PRESENCE_MAX_AGE_S;
-        const stillAtCentral = fresh
-            && (platform.berthNumber === null || api.isInCentralStationArea(vehicle.stopId));
+        if (elapsed < DEPARTING_MIN_MS) return 'departing';
+
+        // a stale position can keep reporting a berth long after the train left
+        const fresh = vehicle && positionAge(vehicle) <= MAX_POSITION_AGE_S;
+        const stillAtCentral = fresh && (platform.berthNumber !== null
+            ? api.isInCentralStationArea(vehicle.stopId)
+            : !clearOfPlatform(vehicle));
 
         if (stillAtCentral && elapsed < DEPARTING_MAX_MS) return 'departing';
         // no fresh fix - hold briefly rather than snapping straight to idle
         if (!fresh && elapsed < DEPARTING_LOST_MS) return 'departing';
+
+        // remember it before resetDwell forgets, so it can't immediately read as
+        // arriving all over again
+        justDepartedKey = relevantVehicleKey;
+        justDepartedAt = now;
         resetDwell();
     }
 
@@ -388,9 +548,8 @@ function applyPhase(next) {
     syncDemoButtons();
 }
 
-// the control matching the current phase is always marked, live or forced - it is
-// the board's "you are here". muted styling is what signals it is being followed
-// rather than pressed.
+// the control matching the current phase is always marked, live or forced - the
+// board's "you are here". muted styling signals "being followed", not "pressed"
 function syncDemoButtons() {
     demoButtons.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.state === phase);
@@ -398,14 +557,19 @@ function syncDemoButtons() {
     });
 }
 
-// One shape for every case: "<prefix> in <time>", or "now" when it's due. The
-// prefix is the only thing that changes, depending on whether the vehicle being
-// counted down is the one standing at the platform.
+// "<prefix> in <time>", or "now" when due - prefix depends on whether the vehicle
+// being counted down is the one standing at the platform
 function countdownPhrase() {
     const seconds = secondsUntilNextDeparture();
     if (seconds === null) return '';
 
-    const prefix = AT_PLATFORM_PHASES.includes(phase) ? 'departing' : 'departs';
+    // "departing" claims this timetabled service is the vehicle standing here, so
+    // only say it when the trip data actually confirms that. Otherwise it reads as
+    // a countdown for a metro that is plainly about to pull out - "departing in
+    // 9 min" while the doors are closing in front of you.
+    const prefix = AT_PLATFORM_PHASES.includes(phase) && serviceIsConfirmed(shownDeparture())
+        ? 'departing'
+        : 'departs';
     if (seconds <= 0) return `${prefix} now`;
     if (seconds < 60) return `${prefix} in under 1 min`;
 
@@ -439,9 +603,48 @@ function readableTextOn(hexColor) {
     return luminance > 0.45 ? '#000' : '#fff';
 }
 
+// The timetable can't be tied to the vehicle present in general - run numbers change
+// at Central. But when the feed tells us which line the vehicle is running and where
+// it terminates, that picks its own row out of the departure list, which is what
+// stops an L2 to Randwick being captioned over an L3 sitting at the platform.
+function departureForVehicle(vehicle) {
+    if (!vehicle || !departures.length) return null;
+
+    const code = api.getLineCodeFromRouteId(vehicle.routeId);
+    const trip = parseTrip(vehicle.label);
+    const destination = trip ? trip.destination : tripTerminus(vehicle);
+    if (!code && !destination) return null;
+
+    const sameLine = dep => !code
+        || `${dep.lineShort || ''} ${dep.line || ''}`.split(/[^A-Za-z0-9]+/).includes(code);
+    const sameDestination = dep => !destination
+        || api.shortStationName(dep.destination).toLowerCase() === destination.toLowerCase();
+
+    // both together is a real match; line alone is still better than the top of the
+    // list, but not enough to call the service confirmed
+    return departures.find(d => sameLine(d) && sameDestination(d)) || null;
+}
+
+// Trip updates give a vehicle's remaining stops, some with a time. If the vehicle at
+// this platform is due here at the time we're showing, that's a real confirmation
+// rather than an assumption - and the caveat underneath can go.
+function serviceIsConfirmed(next) {
+    if (dwellDepartureMatched) return true;
+    if (!next || !platform) return false;
+    const vehicle = primaryVehicle();
+    const stops = vehicle && vehicle.tripId ? tripUpdates[vehicle.tripId] : null;
+    if (!stops) return false;
+
+    const here = stops.find(s => s.stopId === platform.stopId);
+    if (!here || !here.time) return false;
+
+    const scheduled = new Date(departureTimeOf(next)).getTime();
+    return Math.abs(here.time * 1000 - scheduled) <= 120000;
+}
+
 function renderService() {
-    // while a train is standing there, keep showing its departure rather than
-    // letting the panel jump to the next service mid-dwell
+    // keep showing this train's own departure while it's standing there, rather
+    // than jumping to the next service mid-dwell
     const next = dwellDeparture || departures[0];
     infoService.textContent = '';
     infoTime.textContent = '';
@@ -476,10 +679,11 @@ function renderService() {
     infoService.appendChild(badge);
     infoService.appendChild(destination);
 
-    // Run numbers change at Central, so the train standing here cannot be tied to
-    // a timetabled service. Say so rather than implying we know.
+    // run numbers change at Central - can't tie the train here to a timetabled
+    // service, so say so rather than implying we know
     const trainPresent = AT_PLATFORM_PHASES.includes(phase) || phase === 'departing';
     infoServiceNote.textContent = trainPresent
+        && !serviceIsConfirmed(next)
         ? 'Scheduled departure, not confirmed as the vehicle present'
         : '';
 
@@ -502,9 +706,8 @@ function svgText(text, attrs) {
     return el;
 }
 
-// The feed's label reads "17:14 Central Station to Leppington Station". The time
-// is when the trip left its ORIGIN, so it only tells us Central's time when the
-// trip actually started at Central.
+// label reads "17:14 Central Station to Leppington Station" - the time is the
+// trip's ORIGIN departure, only meaningful when the trip started at Central
 function parseTrip(label) {
     const match = /^(\d{1,2}:\d{2})\s+(.+?)\s+to\s+(.+)$/.exec((label || '').trim());
     if (!match) return null;
@@ -517,47 +720,238 @@ function parseTrip(label) {
     };
 }
 
-// where the vehicle is, in words - a Central platform if we can tell, otherwise
-// whichever station's berth it is sitting in
+// "Platform 18" -> "platform 18", so it reads properly mid-sentence. Light rail
+// labels ("Chalmers Street: Platform 1") get the same treatment.
+function platformPhrase(target) {
+    return target.label.replace(/Platform /, 'platform ');
+}
+
+// a stop's name, once the backend has resolved it. tidied down to the plain form:
+// "Macquarie Park Station" -> "Macquarie Park", "Marion Light Rail" -> "Marion"
+function stopName(stopId) {
+    const name = stopNames.get(String(stopId || ''));
+    if (!name) return null;
+    return api.shortStationName(name).replace(/\s+Light Rail$/i, '').trim();
+}
+
+// true when the vehicle is standing at this platform rather than heading for it.
+// heavy rail berths are the platform road itself, so a berth match means it's
+// there. the other feeds give a stop id that means "next stop" just as often as
+// "here", so those need something more.
+function isStandingAt(vehicle, target) {
+    if (!vehicle || !target) return false;
+    if (target.berthNumber !== null) {
+        return api.getBerthPlatformNumber(vehicle.stopId) === target.berthNumber;
+    }
+    // the feed is being explicit that it hasn't arrived, so take its word for it
+    if (vehicle.status === 'INCOMING_AT') return false;
+
+    if (vehicle.stopId === target.stopId) {
+        if (vehicle.status === 'STOPPED_AT') return true;
+
+        // Chalmers Street's feed never says STOPPED_AT - a tram sitting at the
+        // platform still reads IN_TRANSIT_TO, so status alone would never place one
+        // there. Sampled over a minute, trams actually at the stop sat 4-63m from
+        // the platform coordinate while approaching ones were 89m or more out.
+        const away = metresFromPlatform(vehicle, target);
+        if (away !== null && away <= AT_PLATFORM_M) return true;
+    }
+
+    // Metro's stop id can still name the station it last left while it stands here,
+    // so the two tests above can both miss it and the lights sit on "arriving" well
+    // after it pulled in. Its trip says when it was due at this platform, which is
+    // the signal that survives that lag. Distance only sanity-checks it, loosely:
+    // Central's metro platforms are underground, and a train measured 118m from the
+    // platform coordinate while demonstrably stopped at it.
+    const booked = tripStopsAhead(vehicle).find(s => s.stopId === target.stopId);
+    if (!booked || !booked.time || booked.time * 1000 > Date.now()) return false;
+
+    const distance = metresFromPlatform(vehicle, target);
+    return distance !== null && distance <= AT_PLATFORM_BY_TIME_M;
+}
+
+// A trip update lists the whole trip, start to finish, not just what's ahead - and
+// the vehicle's own stop sequence lags, so a tram already at Haymarket can still
+// report Chinatown, the stop behind it. Walk forward from where the feed says it
+// is, past anything long overdue.
+//
+// The grace matters more than it looks, and the two feeds need very different
+// numbers.
+//
+// Light rail set the original figure. A tram standing at a stop has that stop due
+// seconds ago, so skipping every overdue stop walks straight past the one it is
+// sitting at - checked against 11 trams that agreed only 3 times, worse than not
+// correcting at all. Dwelling trams were under 75s overdue and within 150m, while
+// genuinely missed stops ran 100s+ overdue and several hundred metres away. At 90s
+// the same check agreed 10 times out of 11.
+//
+// Metro is far staler and needs the opposite. Tracking vehicles one at a time, the
+// feed claimed a metro was "heading to" a stop it had already been watched standing
+// at on 608 occasions - a median of 93s after the fact, once by seven minutes. 90s
+// corrects only 76% of those, 45s corrects 97%, and since a metro dwells for 24-25s
+// that still clears a train sitting at a stop without cutting it off.
+const STOP_PASSED_GRACE_S = { metro: 45, default: 90 };
+
+function stopPassedGrace(vehicle) {
+    return STOP_PASSED_GRACE_S[vehicle.feed] || STOP_PASSED_GRACE_S.default;
+}
+
+function tripStopsAhead(vehicle) {
+    const stops = vehicle.tripId ? tripUpdates[vehicle.tripId] : null;
+    if (!stops || !stops.length) return [];
+
+    const from = vehicle.stopSequence;
+    const ahead = typeof from === 'number'
+        ? stops.filter(s => typeof s.sequence !== 'number' || s.sequence >= from)
+        : stops.slice();
+
+    // times are sparse, and a late service can have every one of them in the past -
+    // then there's nothing to correct with, so stay where the feed put it
+    const cutoff = Date.now() / 1000 - stopPassedGrace(vehicle);
+    const firstDue = ahead.findIndex(s => s.time && s.time > cutoff);
+    return firstDue > 0 ? ahead.slice(firstDue) : ahead;
+}
+
+// which Central platform this vehicle is standing at, if any
+function standingAtCentralPlatform(vehicle) {
+    const number = api.getBerthPlatformNumber(vehicle.stopId);
+    if (number !== null) return api.getCentralPlatform(`p${number}`);
+
+    const byStop = api.getCentralPlatformByStopId(vehicle.stopId);
+    return byStop && isStandingAt(vehicle, byStop) ? byStop : null;
+}
+
+// where the vehicle is, in words - a Central platform if known, else whichever station's berth
 function describeLocation(vehicle) {
     const platformNumber = api.getBerthPlatformNumber(vehicle.stopId);
     if (platformNumber) return `Central platform ${platformNumber}`;
 
     const station = api.getBerthStation(vehicle.stopId);
-    return station ? `At ${station}` : null;
+    if (station) return `At ${station}`;
+
+    // metro and light rail: a numeric stop id and nothing else. The same field
+    // means "where it is" when stopped and "where it's going" when it isn't, so
+    // the status has to come along with the name.
+    if (vehicle.status === 'STOPPED_AT') {
+        const at = stopName(vehicle.stopId);
+        return at ? `At ${at}` : null;
+    }
+    if (vehicle.status === 'INCOMING_AT') {
+        const into = stopName(vehicle.stopId);
+        return into ? `Arriving at ${into}` : null;
+    }
+
+    // in transit is where the lagging stop id bites, so let the trip's own times
+    // pick the stop and only fall back to the feed's when they can't
+    const ahead = tripStopsAhead(vehicle)[0];
+    const name = stopName(ahead ? ahead.stopId : vehicle.stopId) || stopName(vehicle.stopId);
+    return name ? `Next stop ${name}` : null;
 }
 
-// Two lines for the hover tooltip: the service, then the signal berth it is in.
-// No times - the label's time belongs to wherever the trip started, so it is not
-// Central's and was misleading.
+// heavy rail berth strings are worth showing raw - the loc name is the useful bit.
+// anything else only has a stop id, which means nothing on its own.
+function locationLine(vehicle) {
+    const berth = vehicle.stopId || '';
+    return / Loc$/.test(berth) ? berth : (describeLocation(vehicle) || '');
+}
+
+// where a service finishes up. metro and light rail put the vehicle set number in
+// their label ("RS019", "X37-X38") and name no destination anywhere else, so the
+// last stop on the trip is the only way to say where one is going.
+function tripTerminus(vehicle) {
+    const stops = vehicle.tripId ? tripUpdates[vehicle.tripId] : null;
+    if (!stops || !stops.length) return null;
+    return stopName(stops[stops.length - 1].stopId);
+}
+
+// first Central platform still ahead of this vehicle. has to work off the stops
+// ahead rather than the whole trip, or a service that called at Central an hour ago
+// still reads as heading there
+function upcomingCentralStop(vehicle) {
+    for (const stop of tripStopsAhead(vehicle)) {
+        const platformHere = api.getCentralPlatformByStopId(stop.stopId);
+        if (platformHere) return { platform: platformHere, time: stop.time };
+    }
+    return null;
+}
+
+// Distance is always available, a time only sometimes - many stop updates carry a
+// delay rather than an absolute time. So lead with the metres and add the time in
+// brackets when the feed gives one.
+// minutes until a trip's stop, where the feed gives an absolute time for it
+function arrivalMinutes(stop) {
+    if (!stop.time) return null;
+    const mins = Math.round((stop.time * 1000 - Date.now()) / 60000);
+    if (mins < 0) return null;
+    return mins === 0 ? 'now' : `${mins} min`;
+}
+
+function approachLine(vehicle) {
+    // already there - a distance would only read as misleadingly precise
+    const here = standingAtCentralPlatform(vehicle);
+    if (here) return `At ${platformPhrase(here)}`;
+
+    const next = upcomingCentralStop(vehicle);
+    if (!next) return '';
+
+    const label = platformPhrase(next.platform);
+    const away = metresFromPlatform(vehicle, next.platform);
+    const distance = away === null ? null : `${Math.round(away)}m from ${label}`;
+    const minutes = arrivalMinutes(next);
+
+    if (distance && minutes) return `${distance} (${minutes})`;
+    if (distance) return distance;
+    return minutes ? `Arriving at ${label} (${minutes})` : `Arriving at ${label}`;
+}
+
+// same thing for the info bar, without naming the platform - the picker directly
+// above already says which one
+function platformDistanceLine(vehicle) {
+    if (standingAtCentralPlatform(vehicle)) return 'At the platform';
+
+    const next = upcomingCentralStop(vehicle);
+    if (!next) return '';
+
+    const away = metresFromPlatform(vehicle, next.platform);
+    const minutes = arrivalMinutes(next);
+    if (away === null) return minutes ? `Arriving (${minutes})` : '';
+
+    const distance = `${Math.round(away)}m from platform`;
+    return minutes ? `${distance} (${minutes})` : distance;
+}
+
+// which Central platform this vehicle is at or booked into
+function centralPlatformFor(vehicle) {
+    const here = standingAtCentralPlatform(vehicle);
+    if (here) return here;
+    const next = upcomingCentralStop(vehicle);
+    return next ? next.platform : null;
+}
+
+// tooltip: service, where it's heading, then the signal berth. no times - the
+// label's time belongs to wherever the trip started, not Central, so it'd mislead
 function vehicleTooltip(vehicle, code) {
     const trip = parseTrip(vehicle.label);
+    const destination = trip ? trip.destination : tripTerminus(vehicle);
 
-    const service = trip
-        ? `${code ? code + ' ' : ''}to ${trip.destination}`
+    const service = destination
+        ? `${code ? code + ' ' : ''}to ${destination}`
         : (code || 'Service details not reported');
 
-    // berth strings are the interesting bit; numeric stop ids mean nothing on
-    // their own, so those get the friendly location instead
-    const berth = vehicle.stopId || '';
-    const location = / Loc$/.test(berth) ? berth : (describeLocation(vehicle) || '');
-
-    return { service, location };
+    return { service, approach: approachLine(vehicle), location: locationLine(vehicle) };
 }
 
-// middle of the platform bounding box, which sits a little south and west of the
-// station's nominal coordinate
+// middle of the platform bounding box - sits a little south/west of the station's nominal coord
 function platformsCentre() {
     const b = api.getCentralStationBounds();
     return { lat: (b.minLat + b.maxLat) / 2, lon: (b.minLon + b.maxLon) / 2 };
 }
 
-// Builds one map view. Both maps share this - they only differ in how much ground
-// they cover, and the tile zoom follows from that so tiles stay near 1:1.
+// builds one map view. both maps share this, differing only in ground covered -
+// tile zoom follows from that so tiles stay near 1:1
 function createMapView(svg, config) {
     const { spanM, width, height, scaleBarM } = config;
-    // the close-up centres on the middle of the platforms rather than the station's
-    // nominal point, which sits north-east of where the platforms actually are
+    // close-up centres on the platforms, not the station's nominal point (north-east of them)
     const centre = config.centreOnPlatforms ? platformsCentre() : CENTRAL;
     const metresPerPixel = spanM / height;
     const tileZoom = Math.round(Math.log2(
@@ -614,8 +1008,7 @@ function createMapView(svg, config) {
             x: 0, y: 0, width, height, fill: '#0b1020', opacity: 0.3
         }));
 
-        // Central covers a lot of ground, so outline the whole precinct instead of
-        // pinning one point in the middle of it
+        // Central covers a lot of ground - outline the precinct rather than pin one point
         const b = api.getCentralStationBounds();
         const nw = project(b.maxLat, b.minLon);
         const se = project(b.minLat, b.maxLon);
@@ -678,7 +1071,7 @@ function createMapView(svg, config) {
         }));
     }
 
-    // returns how many vehicles it drew, so the caller can describe the view
+    // returns how many vehicles were drawn, for the caller to describe the view
     function renderTrains() {
         if (!trainLayer) return { inView: 0, primaryInView: false };
         trainLayer.textContent = '';
@@ -703,13 +1096,13 @@ function createMapView(svg, config) {
             const marker = svgEl('g', { class: 'map-marker' });
             const tip = vehicleTooltip(v, code);
             marker.dataset.service = tip.service;
+            marker.dataset.approach = tip.approach;
             marker.dataset.location = tip.location;
             trainLayer.appendChild(marker);
 
             if (isPrimary) {
                 primaryInView = true;
-                // glow matches the line colour so it stays recognisable, rather than
-                // changing every time the indicator phase changes
+                // glow matches the line colour, not the indicator phase, so it stays recognisable
                 marker.appendChild(svgEl('circle', {
                     cx: p.x, cy: p.y, r: 26, fill: lineColour, opacity: 0.28
                 }));
@@ -728,7 +1121,7 @@ function createMapView(svg, config) {
                 'font-weight': 700, 'text-anchor': 'middle'
             }));
 
-            // little arrow just outside the circle showing which way it's going
+            // small direction arrow just outside the circle
             const heading = headingFor(v);
             if (heading !== null) {
                 const rad = (heading - 90) * Math.PI / 180;
@@ -756,7 +1149,7 @@ function renderMaps() {
         ? `This platform's ${noun()} is ringed in white.`
         : `No ${noun()} from this platform is in view right now.`;
 
-    // a feed can fail on its own, which would otherwise just look like a quiet map
+    // a failed feed would otherwise just look like a quiet map
     const failed = Object.keys(feedErrors);
     const warning = failed.length
         ? ` ${failed.length} feed${failed.length === 1 ? '' : 's'} unavailable (${failed.join(', ')}).`
@@ -768,12 +1161,24 @@ function renderMaps() {
 
 /* hover tooltip -------------------------------------------------------- */
 
-// A plain floating div rather than an SVG <title>: the native tooltip needs a
-// long hover before it appears and can't be styled.
+// plain floating div, not an svg <title> - the native tooltip is slow to appear and can't be styled
 const mapTooltip = document.createElement('div');
 mapTooltip.className = 'map-tooltip';
 mapTooltip.hidden = true;
 document.body.appendChild(mapTooltip);
+
+// [text, className] pairs, blanks skipped
+function fillTooltip(lines) {
+    mapTooltip.textContent = '';
+    lines.forEach(([text, className]) => {
+        if (!text) return;
+        const line = document.createElement('div');
+        line.className = className;
+        line.textContent = text;
+        mapTooltip.appendChild(line);
+    });
+    return mapTooltip.childElementCount > 0;
+}
 
 function attachTooltip(svg) {
     svg.addEventListener('mousemove', event => {
@@ -782,21 +1187,40 @@ function attachTooltip(svg) {
             mapTooltip.hidden = true;
             return;
         }
-        mapTooltip.textContent = '';
-        [['service', 'tip-service'], ['location', 'tip-location']]
-            .forEach(([field, className]) => {
-                const value = marker.dataset[field];
-                if (!value) return;
-                const line = document.createElement('div');
-                line.className = className;
-                line.textContent = value;
-                mapTooltip.appendChild(line);
-            });
+        fillTooltip([
+            [marker.dataset.service, 'tip-service'],
+            [marker.dataset.approach, 'tip-approach'],
+            [marker.dataset.location, 'tip-location']
+        ]);
         mapTooltip.hidden = false;
         mapTooltip.style.left = `${event.clientX + 14}px`;
         mapTooltip.style.top = `${event.clientY + 14}px`;
     });
     svg.addEventListener('mouseleave', () => { mapTooltip.hidden = true; });
+}
+
+// the info bar's distance readout expands to the full breakdown on hover. Also on
+// keyboard focus - it carries detail nothing else on the page shows, so it can't be
+// mouse-only
+function attachDetailTooltip(el) {
+    const show = () => {
+        const shown = fillTooltip([
+            [el.dataset.platform, 'tip-service'],
+            [el.dataset.location, 'tip-approach'],
+            [el.dataset.route, 'tip-location']
+        ]);
+        if (!shown) return;
+        const box = el.getBoundingClientRect();
+        mapTooltip.hidden = false;
+        mapTooltip.style.left = `${box.left}px`;
+        mapTooltip.style.top = `${box.bottom + 8}px`;
+    };
+    const hide = () => { mapTooltip.hidden = true; };
+
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('focus', show);
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('blur', hide);
 }
 
 /* render --------------------------------------------------------------- */
@@ -805,15 +1229,30 @@ function render() {
     renderService();
     infoLights.textContent = indicatorText(phase);
 
-    // show the berth the tracked vehicle is sitting in, so it's clear which Loc
-    // the board is reacting to
+    // the same three lines the map hover gives, for the vehicle the lights are
+    // about: which service it is, where it's heading, and where it is right now
     const shown = primaryVehicle();
-    infoLoc.textContent = shown && shown.stopId ? shown.stopId : '';
+    infoVehicle.textContent = shown
+        ? vehicleTooltip(shown, api.getLineCodeFromRouteId(shown.routeId)).service
+        : '';
+
+    // just the distance on the face of it; the rest is a hover away
+    infoDistance.textContent = shown ? platformDistanceLine(shown) : '';
+    const target = shown ? centralPlatformFor(shown) : null;
+    // no "Central" prefix - the whole board is Central
+    infoDistance.dataset.platform = target ? target.label : '';
+    infoDistance.dataset.location = shown ? locationLine(shown) : '';
+    // the raw route id, not the tidied line code - run numbers and route codes change
+    // through Central, so seeing the real one is the point
+    infoDistance.dataset.route = shown && shown.routeId ? `Route ${shown.routeId}` : '';
+    infoDistance.classList.toggle('has-detail', Boolean(shown && infoDistance.textContent));
 
     if (platform && platform.unpublished) {
         infoStatus.textContent = 'No data published for this platform';
         infoStatus.className = 'error';
-    } else if (!hasLoaded && liveMode) {
+    // only "loading" with genuinely nothing to go on - the feed is shared between
+    // platforms, so the lights often already know the state
+    } else if (!hasLoaded && liveMode && vehicles.length === 0) {
         infoStatus.textContent = 'Loading information...';
         infoStatus.className = 'loading';
     } else if (!liveMode) {
@@ -845,13 +1284,16 @@ async function poll() {
     isLoading = true;
     render();
 
-    // Settled, not all: departures and positions fail independently. A 500 on
-    // departures used to throw away the vehicle positions too, which are what
-    // actually drive the lights.
-    const [departureResult, positionResult] = await Promise.allSettled([
+    // settled, not all: departures and positions fail independently, and positions
+    // drive the lights - all would let a departures 500 discard those too
+    const [departureResult, positionResult, tripResult] = await Promise.allSettled([
         api.getDeparturesRaw(platform.stopId),
-        api.getVehiclePositions(ALL_FEEDS)
+        api.getVehiclePositions(ALL_FEEDS),
+        api.getTripUpdates(TRIP_FEEDS)
     ]);
+
+    // purely additive - if this fails the board carries on as before
+    if (tripResult.status === 'fulfilled') tripUpdates = tripResult.value;
 
     if (positionResult.status === 'fulfilled') {
         vehicles = positionResult.value.vehicles;
@@ -860,9 +1302,8 @@ async function poll() {
     }
 
     if (departureResult.status === 'fulfilled') {
-        // the stop id is already platform-specific, so everything returned belongs
-        // here. Services that have already gone are dropped, with a small grace so
-        // a train still sitting at the platform keeps its own departure showing.
+        // stop id is already platform-specific. drop already-gone services, with a
+        // small grace so a train still at the platform keeps its own departure showing
         const cutoff = Date.now() - 30000;
         departures = api.parseDeparturesRaw(departureResult.value)
             .filter(d => !d.isCancelled && departureTimeOf(d))
@@ -880,6 +1321,45 @@ async function poll() {
 
     isLoading = false;
     tick();
+    fetchStopNames();
+}
+
+// names for the stops metro and light rail report by number. Deliberately not
+// awaited: the first lookup of a stop takes a few seconds upstream, so the board
+// draws straight away and picks the names up on a later poll.
+function fetchStopNames() {
+    const wanted = new Set();
+
+    liveVehicles().forEach(v => {
+        // heavy rail berth strings already name their station
+        if (v.stopId && /^\d+$/.test(v.stopId)) wanted.add(v.stopId);
+
+        // the trip's next stop can differ from the feed's, and its last is the destination
+        const ahead = tripStopsAhead(v);
+        if (ahead.length) wanted.add(String(ahead[0].stopId));
+
+        const stops = v.tripId ? tripUpdates[v.tripId] : null;
+        if (stops && stops.length) wanted.add(String(stops[stops.length - 1].stopId));
+    });
+
+    const missing = [...wanted].filter(id => id && !stopNames.has(id));
+    if (!missing.length) return;
+
+    api.getStopNames(missing).then(({ names, pending }) => {
+        const before = stopNames.size;
+        Object.entries(names).forEach(([id, name]) => stopNames.set(id, name));
+        if (stopNames.size !== before) render();
+
+        // names the backend is still looking up land within a few seconds, so come
+        // back for them rather than leaving light rail showing only its line code
+        // until the next poll a dozen seconds away
+        if (pending > 0 && stopNameRetry === null) {
+            stopNameRetry = setTimeout(() => {
+                stopNameRetry = null;
+                fetchStopNames();
+            }, STOP_NAME_RETRY_MS);
+        }
+    });
 }
 
 function tick() {
@@ -901,7 +1381,10 @@ function selectPlatform(id) {
     departures = [];
     hasLoaded = false;
     lastError = null;
+    justDepartedKey = null;
+    justDepartedAt = null;
     resetDwell();
+    freshSelection = true;
     if (mainMap) mainMap.renderPlatform();
     if (insetMap) insetMap.renderPlatform();
     render();
@@ -942,6 +1425,7 @@ insetMap = createMapView(document.getElementById('trainMapInset'),
     { ...INSET_VIEW, centreOnPlatforms: true });
 attachTooltip(document.getElementById('trainMap'));
 attachTooltip(document.getElementById('trainMapInset'));
+attachDetailTooltip(infoDistance);
 mainMap.buildBase();
 insetMap.buildBase();
 selectPlatform(platformSelect.value);

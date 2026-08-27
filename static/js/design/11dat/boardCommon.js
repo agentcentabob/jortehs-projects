@@ -56,6 +56,10 @@ function handleSearchInput(board, e) {
     board.searchTimeout = setTimeout(async () => {
         try {
             const stops = await api.searchStops(query);
+            // cached so loadDepartures() can reuse this exact search instead of
+            // re-hitting /api/stops for text the user just typed
+            board.lastSearchQuery = query;
+            board.lastSearchResults = stops;
             displaySuggestions(board, stops.slice(0, 6));
         } catch (error) {
             console.error('Search error:', error);
@@ -105,7 +109,11 @@ export async function loadDepartures(board) {
     if (!(board.stopId && board.stopName === inputValue)) {
         showStatus(board.statusEl, 'Looking up station...', 'loading');
         try {
-            const stops = await api.searchStops(inputValue);
+            // reuse the suggestions search if it was for this exact text, rather
+            // than hitting /api/stops again for a query already in hand
+            const stops = board.lastSearchQuery === inputValue && board.lastSearchResults
+                ? board.lastSearchResults
+                : await api.searchStops(inputValue);
             if (stops.length > 0) {
                 board.stopId = stops[0].id;
                 board.stopName = stops[0].name;

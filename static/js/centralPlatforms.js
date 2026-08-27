@@ -138,6 +138,12 @@ export const CENTRAL_PLATFORMS = [
     }
 ];
 
+// reverse of the stop-id table - which platform a stop id belongs to, for reading trip updates
+export function getPlatformByStopId(stopId) {
+    if (!stopId) return null;
+    return CENTRAL_PLATFORMS.find(p => p.stopId === String(stopId)) || null;
+}
+
 export function getPlatform(id) {
     return CENTRAL_PLATFORMS.find(p => p.id === id) || null;
 }
@@ -209,16 +215,22 @@ const CENTRAL_APPROACH_BERTHS = new Set([
     'SY371', 'SY372', 'SY373', 'SY374', 'SY379', 'SY389', 'SY395'
 ]);
 
-// The berth a train passes through immediately before it enters each platform.
-// TfNSW publishes no track layout, so this was worked out by watching which berth
-// each train came from in the live feed. Only platforms seen doing this
-// consistently are listed - anything missing falls back to starting "arriving"
-// when the train reaches the platform itself, rather than guessing.
+// The berth a train passes through immediately before it enters each platform,
+// read off the RailSafe signalling diagrams for Central. Platforms 19, 22 and 23
+// were also seen doing exactly this in the live feed, which is a useful check on
+// the rest. Platforms 1-15 aren't listed: their berths are the platform roads
+// themselves, so there is no separate run-in signal to key off.
 const PLATFORM_APPROACH_BERTHS = {
-    19: ['SY374'],
-    23: ['SY379'],
-    24: ['SY712'],
-    25: ['ES0.06']
+    16: ['SY380'],   // northbound
+    17: ['SY382'],   // northbound
+    18: ['SY372'],   // southbound
+    19: ['SY374'],   // southbound
+    20: ['SY388'],   // northbound - can also reach 21, but rarely
+    21: ['SY390'],   // northbound
+    22: ['SY373'],   // southbound
+    23: ['SY379'],   // southbound
+    24: ['SY712'],   // Eastern Suburbs
+    25: ['ES0.06']   // Eastern Suburbs
 };
 
 // true if this berth is the known run-in to the given platform
@@ -238,22 +250,6 @@ function berthCodes(stopId) {
 export function isInCentralStationArea(stopId) {
     if (getBerthPlatformNumber(stopId) !== null) return true;
     return berthCodes(stopId).some(code => CENTRAL_APPROACH_BERTHS.has(code));
-}
-
-// both of these berth station names mean Central (see BERTH_PATTERN above)
-const CENTRAL_BERTH_NAMES = ['central', 'sydney'];
-
-// true if this vehicle is reported at a platform of some station other than Central
-export function isAtAnotherStation(vehicle, platform) {
-    if (!vehicle) return false;
-
-    // metro/lightrail/nswtrains: numeric stop id plus a proximity status
-    if (vehicle.status === 'STOPPED_AT' || vehicle.status === 'INCOMING_AT') {
-        if (vehicle.stopId && vehicle.stopId !== platform.stopId) return true;
-    }
-
-    const station = getBerthStation(vehicle.stopId);
-    return Boolean(station) && !CENTRAL_BERTH_NAMES.includes(station.toLowerCase());
 }
 
 // true if this vehicle is sitting at (or arriving into) the given platform.

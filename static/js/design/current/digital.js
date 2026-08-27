@@ -72,6 +72,10 @@ class DigitalBoard {
         this.searchTimeout = setTimeout(async () => {
             try {
                 const stops = await api.searchStops(query);
+                // cached so loadDepartures() can reuse this search instead of
+                // re-hitting /api/stops for text the user just typed
+                this.lastSearchQuery = query;
+                this.lastSearchResults = stops;
                 this.displaySuggestions(stops);
             } catch (error) {
                 console.error('Search error:', error);
@@ -117,7 +121,11 @@ class DigitalBoard {
         if (!(this.stopId && this.stopName === inputValue)) {
             this.showStatus('Looking up station...', 'loading');
             try {
-                const stops = await api.searchStops(inputValue);
+                // reuse the suggestions search if it was for this exact text, rather
+                // than hitting /api/stops again for a query already in hand
+                const stops = this.lastSearchQuery === inputValue && this.lastSearchResults
+                    ? this.lastSearchResults
+                    : await api.searchStops(inputValue);
                 if (stops.length > 0) {
                     this.stopId = stops[0].id;
                     this.stopName = stops[0].name;

@@ -64,10 +64,8 @@ h1 {
     font-size: 0.95em;
 }
 
-.category-divider {
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.15); 
-    margin: 24px 0;
+.subcategory + .subcategory {
+    margin-top: 24px;
 }
 
 .category-subheading {
