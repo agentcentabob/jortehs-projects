@@ -4,10 +4,11 @@ import os
 # explicit --bind, that CLI flag wins over this - no conflict either way
 bind = f"0.0.0.0:{os.environ.get('PORT', 5001)}"
 
-# every route here just proxies to tfnsw/osm and waits on network i/o - threads
-# share memory (unlike separate worker processes), so this adds concurrency
-# without multiplying RAM on a constrained instance
-workers = 2
+# every route here just proxies to tfnsw/osm and waits on network i/o - one
+# process with threads, not multiple workers, since each extra worker process
+# loads its own full copy of everything into memory. render's free tier only
+# has ~512MB, and 2 workers was pushing past that into an oom-kill boot loop
+workers = 1
 threads = 4
 worker_class = "gthread"
 
