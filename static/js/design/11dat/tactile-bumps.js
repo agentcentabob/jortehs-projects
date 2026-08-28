@@ -920,12 +920,20 @@ function platformDistanceLine(vehicle) {
     return minutes ? `${distance} (${minutes})` : distance;
 }
 
-// which Central platform this vehicle is at or booked into
+// which Central platform this vehicle is at or booked into, and when it's due there
 function centralPlatformFor(vehicle) {
     const here = standingAtCentralPlatform(vehicle);
-    if (here) return here;
+    if (here) return { platform: here, time: null, standing: true };
+
     const next = upcomingCentralStop(vehicle);
-    return next ? next.platform : null;
+    return next ? { platform: next.platform, time: next.time, standing: false } : null;
+}
+
+// "Due in 4 min" / "Due now", where the trip gives a time for the stop
+function dueLine(stop) {
+    const minutes = arrivalMinutes(stop);
+    if (!minutes) return '';
+    return minutes === 'now' ? 'Due now' : `Due in ${minutes}`;
 }
 
 // tooltip: service, where it's heading, then the signal berth. no times - the
@@ -1206,6 +1214,7 @@ function attachDetailTooltip(el) {
     const show = () => {
         const shown = fillTooltip([
             [el.dataset.platform, 'tip-service'],
+            [el.dataset.due, 'tip-approach'],
             [el.dataset.location, 'tip-approach'],
             [el.dataset.route, 'tip-location']
         ]);
@@ -1238,9 +1247,13 @@ function render() {
 
     // just the distance on the face of it; the rest is a hover away
     infoDistance.textContent = shown ? platformDistanceLine(shown) : '';
+    // phrased like the lines under it, and no "Central" prefix - the whole board is
+    // Central. "Expected on" while it's still coming, "At" once it's here.
     const target = shown ? centralPlatformFor(shown) : null;
-    // no "Central" prefix - the whole board is Central
-    infoDistance.dataset.platform = target ? target.label : '';
+    infoDistance.dataset.platform = target
+        ? `${target.standing ? 'At' : 'Expected on'} ${platformPhrase(target.platform)}`
+        : '';
+    infoDistance.dataset.due = target && !target.standing ? dueLine(target) : '';
     infoDistance.dataset.location = shown ? locationLine(shown) : '';
     // the raw route id, not the tidied line code - run numbers and route codes change
     // through Central, so seeing the real one is the point
