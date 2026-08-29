@@ -1,0 +1,494 @@
+/* --accent is set per result from the operator's brand colour, so the answer for a
+   Sydney Trains set and an NSW TrainLink set don't read the same */
+:root {
+    --accent: var(--sydneytrains);
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background: var(--page-bg);
+    color: var(--page-text);
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+header {
+    background: var(--panel);
+    padding: 14px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.header-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+
+header h1 {
+    margin: 0;
+    color: var(--white);
+    font-size: 1.5em;
+}
+
+.back-link {
+    display: inline-block;
+    color: var(--white);
+    text-decoration: none;
+    font-size: 1.1em;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+/* no max-width - these should only wrap at the page edge */
+.intro {
+    color: var(--l-gray);
+    line-height: 1.5;
+    margin: 0 0 22px;
+}
+
+/* every panel on the page is the same kind of titled tile */
+.tile {
+    display: flex;
+    flex-direction: column;
+    background: var(--tile);
+    border: 1px solid var(--tile-border);
+    border-radius: 10px;
+    padding: 18px 20px;
+}
+
+.tile-title {
+    color: var(--white);
+    font-size: 1.15em;
+    margin: 0 0 14px;
+}
+
+/* lookup */
+
+.lookup-form {
+    display: flex;
+    gap: 8px;
+}
+
+#queryInput {
+    flex: 1;
+    min-width: 0;
+    background: var(--well);
+    color: var(--white);
+    border: 1px solid var(--well-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 1.15em;
+    letter-spacing: 0.03em;
+}
+
+#queryInput::placeholder {
+    color: var(--muted);
+    letter-spacing: normal;
+}
+
+#queryInput:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#lookupBtn {
+    background: var(--panel);
+    color: var(--white);
+    border: 1px solid var(--well-border);
+    border-radius: 6px;
+    width: 48px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+}
+
+#lookupBtn:hover {
+    background: var(--panel-hover);
+}
+
+.examples-label {
+    color: var(--l-gray);
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 16px 0 8px;
+}
+
+.examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.example-btn {
+    background: var(--well);
+    color: var(--white);
+    border: 1px solid var(--well-border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.9em;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+}
+
+.example-btn:hover {
+    background: var(--panel-hover);
+    border-color: var(--tile-border);
+}
+
+.example-btn .example-fleet {
+    color: var(--l-gray);
+    letter-spacing: normal;
+    margin-left: 6px;
+}
+
+/* results */
+
+/* answer beside the fleet background, formation and working full width below -
+   the same 2:1 split the other boards on this site use */
+.results {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.results:empty {
+    margin: 0;
+}
+
+.tile-formation,
+.tile-working,
+.tile-placeholder,
+.tile-error {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 1000px) {
+    .results {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.tile-placeholder,
+.tile-error {
+    color: var(--l-gray);
+    line-height: 1.5;
+}
+
+.tile-error strong {
+    color: var(--white);
+    display: block;
+    margin-bottom: 6px;
+    font-size: 1.05em;
+}
+
+/* the answer itself: set number first, at the size it deserves */
+.answer-set {
+    font-size: 4.2em;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+    letter-spacing: 0.01em;
+}
+
+@media (max-width: 700px) {
+    .answer-set {
+        font-size: 3em;
+    }
+}
+
+.answer-fleet {
+    color: var(--white);
+    font-size: 1.35em;
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.answer-sub {
+    color: var(--l-gray);
+    margin-top: 2px;
+}
+
+.answer-carriage {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--tile-border);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px 24px;
+}
+
+.answer-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.field-label {
+    color: var(--l-gray);
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.answer-cell strong,
+.fleet-facts strong {
+    color: var(--white);
+    font-weight: 600;
+    font-size: 1.05em;
+}
+
+/* fleet background */
+
+.fleet-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fleet-fact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* formation */
+
+/* 8 waratah cars don't fit a narrow window, and shrinking them to fit makes the
+   numbers unreadable - let the strip scroll on its own instead */
+.formation-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+.car {
+    flex: 1 1 0;
+    min-width: 118px;
+    background: var(--well);
+    border: 1px solid var(--well-border);
+    /* flat where the cars meet the track, rounded on top like a car body */
+    border-radius: 10px 10px 4px 4px;
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* the roof line, so a row of boxes reads as a train */
+.car::before {
+    content: '';
+    display: block;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--tile-border);
+    margin-bottom: 4px;
+}
+
+/* the searched car is marked by the operator's brand colour alone - a second
+   background tone would be one more colour that isn't in the palette */
+.car-match {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.car-match::before {
+    background: var(--accent);
+}
+
+.car-position {
+    color: var(--l-gray);
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.car-number {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 1.1em;
+    letter-spacing: 0.02em;
+}
+
+.car-match .car-number {
+    color: var(--accent);
+}
+
+.car-type {
+    color: var(--l-gray);
+    font-size: 0.8em;
+    line-height: 1.3;
+}
+
+.formation-note {
+    color: var(--minor);
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin: 12px 0 0;
+}
+
+.formation-source {
+    color: var(--l-gray);
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin: 12px 0 0;
+}
+
+/* working */
+
+.working-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+}
+
+.working-steps li {
+    position: relative;
+    padding: 0 0 0 34px;
+    color: var(--page-text);
+    line-height: 1.55;
+    counter-increment: step;
+}
+
+.working-steps li + li {
+    margin-top: 10px;
+}
+
+.working-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--tile-border);
+    color: var(--l-gray);
+    font-size: 0.78em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* reference */
+
+.tile-reference {
+    margin-top: 20px;
+}
+
+.reference-intro {
+    color: var(--l-gray);
+    line-height: 1.55;
+    margin: 0 0 18px;
+}
+
+.fleet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.fleet-card {
+    background: var(--well);
+    border: 1px solid var(--well-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+
+.fleet-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.fleet-card-name {
+    color: var(--white);
+    font-weight: 600;
+}
+
+.fleet-card-code {
+    color: var(--l-gray);
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.fleet-card-meta {
+    color: var(--l-gray);
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin-top: 6px;
+}
+
+.fleet-card-meta code {
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+.fleet-sets {
+    margin-top: 10px;
+    font-size: 0.85em;
+}
+
+.fleet-sets summary {
+    color: var(--bus);
+    cursor: pointer;
+}
+
+.fleet-sets-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+    /* 111 tangara sets is a lot of chips - cap it and let the list scroll */
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.set-chip {
+    background: var(--panel);
+    color: var(--white);
+    border: 1px solid var(--tile-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.95em;
+    cursor: pointer;
+}
+
+.set-chip:hover {
+    background: var(--panel-hover);
+}
+
+.page-note {
+    color: var(--l-gray);
+    font-size: 0.85em;
+    line-height: 1.6;
+    margin: 22px 0 0;
+    padding-bottom: 40px;
+}
+
+.page-note a {
+    color: var(--bus);
+}
+
+.page-note code {
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.95em;
+}

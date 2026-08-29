@@ -1,8 +1,8 @@
 # jorteh's projects!
-a home for my various code projects, including multiple projects:
+a home for my various code projects, including multiple apps:
 - virtual departure boards
-- digitally simulated tactile bumps
-- set checker _coming soon_
+- digitally simulated led tactile bumps
+- set checker
 
 **notice: collaborating with integrated claude code to help me turn my idea into a functional app. i don't condone the use of generative ai!!*
 

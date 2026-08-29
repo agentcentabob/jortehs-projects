@@ -9,6 +9,8 @@ import os
 from dotenv import load_dotenv
 from google.transit import gtfs_realtime_pb2
 
+import setchecker
+
 
 load_dotenv()
 
@@ -421,6 +423,22 @@ def map_tile():
         mimetype='image/png',
         headers={'Cache-Control': 'public, max-age=86400'}
     )
+
+
+@app.route('/api/set-checker', methods=['GET'])
+def set_checker():
+    """carriage number -> set number, and the other way round. No upstream call:
+    the whole thing is the tables and rules in the setchecker package."""
+    query = request.args.get('q', '')
+    if not query.strip():
+        return jsonify({'error': 'q is required'}), 400
+    return jsonify(setchecker.lookup(query))
+
+
+@app.route('/api/set-checker/fleets', methods=['GET'])
+def set_checker_fleets():
+    """everything the checker covers, for the reference panel on the page"""
+    return jsonify(setchecker.catalogue())
 
 
 @app.route('/api/health', methods=['GET'])

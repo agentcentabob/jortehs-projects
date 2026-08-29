@@ -95,6 +95,28 @@ class TfNSWAPI {
         }
     }
 
+    // carriage number -> set number, and set number -> formation. Nothing to do
+    // with tfnsw: the answer comes from composition tables and numbering rules held
+    // in the setchecker package on the backend. A "not found" is a normal answer
+    // with a reason attached, not an error
+    async checkSet(query) {
+        const response = await fetch(`${this.backendUrl}/set-checker?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+        return await response.json();
+    }
+
+    // every fleet the set checker covers, for its reference panel
+    async getSetCheckerFleets() {
+        const response = await fetch(`${this.backendUrl}/set-checker/fleets`);
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+        const data = await response.json();
+        return Array.isArray(data.classes) ? data.classes : [];
+    }
+
     // parses a raw tfnsw stopEvents response into a flat departure list
     parseDeparturesRaw(data) {
         const departures = [];

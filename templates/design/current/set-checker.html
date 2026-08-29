@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Set Checker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/design/current/set-checker.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <a href="/" class="back-link">← Back</a>
+                <h1>Train Set Checker</h1>
+            </div>
+        </header>
+
+        <p class="intro">
+            Every carriage on the Sydney Trains and NSW TrainLink network carries its own number, and every carriage
+            belongs to a numbered set. This turns one into the other, both ways, and shows the working.
+        </p>
+
+        <section class="tile tile-lookup">
+            <h2 class="tile-title">Look up a number</h2>
+            <form class="lookup-form" id="lookupForm">
+                <input
+                    type="text"
+                    id="queryInput"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="Carriage number (D6312) or set number (K72)"
+                    aria-label="Carriage number or set number"
+                />
+                <button type="submit" id="lookupBtn" title="Look up">→</button>
+            </form>
+            <p class="examples-label">Or try one of these:</p>
+            <div class="examples" id="examples"></div>
+        </section>
+
+        <!-- one live region for the whole answer: the result arrives without the page
+             moving, so a screen reader gets nothing otherwise -->
+        <div class="results" id="results" aria-live="polite"></div>
+
+        <section class="tile tile-reference">
+            <h2 class="tile-title">What the checker covers</h2>
+            <p class="reference-intro">
+                Seven fleets, answered two different ways. Waratah, Waratah Series 2, Mariyung and OSCAR carriages
+                carry their set number inside the carriage number, so the whole set can be worked back out from the
+                numbering. Tangara, Millennium and K set carriages don't, and have to be looked up in a composition
+                table instead — which is why the checker knows a fixed number of those sets and no others.
+            </p>
+            <div class="fleet-grid" id="fleetGrid"></div>
+        </section>
+
+        <p class="page-note">
+            Ported from the standalone Python set checker in
+            <a href="https://github.com/agentcentabob/transport-shenanigans" target="_blank" rel="noopener">transport-shenanigans</a>.
+            Composition tables and numbering rules are held server side and answered by
+            <code>/api/set-checker</code> — no Transport for NSW data is involved, so nothing here is live.
+        </p>
+    </div>
+
+    <script type="module" src="/static/js/design/current/set-checker.js"></script>
+</body>
+</html>

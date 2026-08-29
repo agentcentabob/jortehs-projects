@@ -65,6 +65,19 @@ ported from previous project with departure board */
     --bus: #009ED7;
     --lightrail: #E4022D;
     --ferry: #009E4D;
+
+    /* shared dark ui chrome - the panel greys the design pages were already using,
+       named here so a new page draws from the same palette instead of picking its
+       own near-identical navy. Values unchanged from where they were hardcoded. */
+    --page-bg: #000;
+    --page-text: #eee;
+    --panel: #16213e;        /* header bars, chips */
+    --panel-hover: #223154;
+    --tile: #10182c;         /* content panels */
+    --tile-border: #22304f;
+    --well: #0a0a12;         /* inputs and anything inset into a tile */
+    --well-border: #2a2a3a;
+    --muted: #5a5a68;        /* placeholder and disabled text */
 }
 
 * {
