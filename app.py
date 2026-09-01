@@ -105,7 +105,13 @@ def get_departures():
         'depArrMacro': 'dep',
         'itdDate': itd_date,
         'itdTime': itd_time,
-        'TfNSWTR': 'true'
+        'TfNSWTR': 'true',
+        # default window (40 events) is shared across every mode at the stop,
+        # chronologically - at a big multi-modal interchange like Central the
+        # buses alone fill it, leaving as few as 3 metro events after
+        # client-side filtering. 150 reliably leaves 10+ metro events even
+        # there; verified against live data, no evidence of a server-side cap
+        'limit': 150
     }
 
     headers = {
