@@ -1,5 +1,5 @@
 import api from '../../api.js';
-import * as common from './boardCommon.js';
+import * as common from './board-common.js';
 
 class HorizontalBoard {
     constructor() {
@@ -38,7 +38,6 @@ class HorizontalBoard {
 
         common.setupStationSearch(this);
 
-        // search bar always starts empty - no restoring the last station searched
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
     }
@@ -81,8 +80,7 @@ class HorizontalBoard {
         common.displayStationInfo(this);
     }
 
-    // reverts the board to its initial empty state - used when a station turns out not to be metro.
-    // the board itself always stays visible (outline included) - only the message inside changes
+    // resets to the empty state - board itself stays visible, only the message changes
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
@@ -95,18 +93,16 @@ class HorizontalBoard {
         this.platformToggle.style.display = 'none';
     }
 
-    // the station is real and on the M1, but the Bankstown extension segment
-    // it's part of isn't carrying passengers yet
+    // station is real and on the M1, just not open yet (Bankstown extension)
     showLineOpeningSoon() {
         this.allDepartures = [];
         this.platformToggle.innerHTML = '';
         this.platformToggle.style.display = 'none';
-        this.departuresEl.innerHTML = '<p class="no-departures">No services running currently - line opening soon.</p>';
+        this.departuresEl.innerHTML = '<p class="no-departures">No service (line opening soon)</p>';
         this.displayStationInfo();
     }
 
-    // shows a platform picker only when the station actually has more than one -
-    // most stations only have one metro platform, so it stays hidden there
+    // shows the platform picker only when the station has more than one
     updatePlatformSelector() {
         const platforms = [...new Set(this.allDepartures.map(dep => api.getShortPlatform(dep.platform)))]
             .filter(p => p && p !== '-')
@@ -168,7 +164,6 @@ class HorizontalBoard {
             const destEl = document.createElement('div');
             destEl.className = 'dest';
 
-            // destination and stopping pattern share a line
             const nameLineEl = document.createElement('div');
             nameLineEl.className = 'name-line';
 
@@ -177,7 +172,7 @@ class HorizontalBoard {
             serviceNameEl.textContent = api.shortStationName(dep.destination) || 'Unknown';
             nameLineEl.appendChild(serviceNameEl);
 
-            // tfnsw doesn't provide real stopping-pattern data for metro - see m1Line.js
+            // tfnsw has no real stopping-pattern data for metro - see m1-line.js
             const stoppingPatternEl = document.createElement('div');
             stoppingPatternEl.className = 'destination-via';
             stoppingPatternEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);

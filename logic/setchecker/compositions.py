@@ -1,9 +1,9 @@
-"""Set composition tables for the fleets whose carriage numbers don't follow a rule.
-
-Ported from the standalone set checker in agentcentabob/transport-shenanigans.
-T, M and K sets have been shuffled around enough over their lives that there is no
-formula linking a carriage to its set - a table is the only way to answer.
-"""
+# Set composition tables for the fleets whose carriage numbers do not
+# follow a rule.
+#
+# T, M and K sets have been shuffled around enough over their lives that
+# there is no formula linking a carriage to its set - a table is the only
+# way to answer.
 
 # 4 car Tangara sets
 T_SET_COMPOSITIONS = {
@@ -195,7 +195,7 @@ K_SET_COMPOSITIONS = {
 
 
 def _reverse(compositions):
-    """carriage number -> set number, for every carriage in a composition table"""
+    # carriage number -> set number, for every carriage in a table
     return {
         carriage.upper(): set_name
         for set_name, carriages in compositions.items()

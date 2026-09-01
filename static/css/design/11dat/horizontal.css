@@ -1,6 +1,5 @@
-/* segmented "All / 26 / 27" toggle - each option is a plain button (inherits
-   the base button styling from boardCommon.css), the selected one highlighted
-   in the board's teal */
+/* segmented "All / 26 / 27" toggle - plain buttons (base styling from
+   board-common.css), selected one highlighted in the board's teal */
 .platform-toggle {
     display: none;
     gap: 6px;

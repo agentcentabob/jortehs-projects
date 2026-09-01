@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 from google.transit import gtfs_realtime_pb2
 
-import setchecker
+from logic import setchecker
 
 
 load_dotenv()
@@ -19,62 +19,60 @@ app = Flask(__name__)
 API_KEY = os.getenv('TFNSW_API_KEY')
 API_BASE_URL = 'https://api.transport.nsw.gov.au/v1/tp'
 
-# every outbound call gets one - without it a hung upstream connection blocks the
-# request forever, which showed up as the board freezing on "Loading information"
+# without this a hung upstream connection blocks the request forever
 REQUEST_TIMEOUT = 20
 
-# gtfs-realtime vehicle position feeds, keyed by the short name the frontend uses.
-# note the mixed versions: v2 superseded v1 for sydneytrains/metro/innerwest only
-# (v1 404s for those), while cbdandsoutheast and nswtrains still live on v1.
+# v2 replaced v1 for sydneytrains/metro/innerwest only (v1 404s for those);
+# cbdandsoutheast and nswtrains still live on v1
+GTFS_V1 = 'https://api.transport.nsw.gov.au/v1/gtfs'
+GTFS_V2 = 'https://api.transport.nsw.gov.au/v2/gtfs'
+
 VEHICLE_FEEDS = {
-    'sydneytrains': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/sydneytrains',
-    'metro': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/metro',
-    'lightrail_innerwest': 'https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/lightrail/innerwest',
-    'lightrail_cbdse': 'https://api.transport.nsw.gov.au/v1/gtfs/vehiclepos/lightrail/cbdandsoutheast',
-    'nswtrains': 'https://api.transport.nsw.gov.au/v1/gtfs/vehiclepos/nswtrains',
+    'sydneytrains': f'{GTFS_V2}/vehiclepos/sydneytrains',
+    'metro': f'{GTFS_V2}/vehiclepos/metro',
+    'lightrail_innerwest': f'{GTFS_V2}/vehiclepos/lightrail/innerwest',
+    'lightrail_cbdse': f'{GTFS_V1}/vehiclepos/lightrail/cbdandsoutheast',
+    'nswtrains': f'{GTFS_V1}/vehiclepos/nswtrains',
 }
 
 # gtfs-realtime VehicleStopStatus enum
 VEHICLE_STOP_STATUS = {0: 'INCOMING_AT', 1: 'STOPPED_AT', 2: 'IN_TRANSIT_TO'}
 
-# feeds refresh every ~10-30s upstream, so a short cache stops platform switching
-# and polling from making redundant calls
+# feeds refresh every ~10-30s upstream, so a short cache stops platform
+# switching and polling from making redundant calls
 _feed_cache = {}
 FEED_CACHE_SECONDS = 5
 
-# OSM map tiles are proxied through here rather than fetched by the browser, so the
-# project keeps its "everything goes through the Flask backend" shape and no CDN or
-# JS mapping library is needed. OSM's tile usage policy requires an identifying
-# User-Agent and discourages heavy traffic, hence the cache.
+# proxied so the browser never talks to OSM directly - no CDN or mapping
+# library needed. OSM requires an identifying User-Agent and discourages
+# heavy traffic, hence the cache
 OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 OSM_USER_AGENT = 'virtualdpb-tfnsw/1.0 (student project; local use)'
 _tile_cache = {}
 TILE_CACHE_MAX = 500
 
-# per-trip upcoming stops - names platform-level stop ids, the only published way
-# to know a service's arrival platform ahead of time. changes slowly, cached longer
-# than the position feeds. same mixed v1/v2 split as VEHICLE_FEEDS, and nswtrains
-# has no trip update feed at all.
+# names platform-level stop ids - the only published way to know a
+# service's arrival platform ahead of time. same v1/v2 split as
+# VEHICLE_FEEDS; nswtrains has none
 TRIP_UPDATE_FEEDS = {
-    'sydneytrains': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/sydneytrains',
-    'metro': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/metro',
-    'lightrail_innerwest': 'https://api.transport.nsw.gov.au/v2/gtfs/realtime/lightrail/innerwest',
-    'lightrail_cbdse': 'https://api.transport.nsw.gov.au/v1/gtfs/realtime/lightrail/cbdandsoutheast',
+    'sydneytrains': f'{GTFS_V2}/realtime/sydneytrains',
+    'metro': f'{GTFS_V2}/realtime/metro',
+    'lightrail_innerwest': f'{GTFS_V2}/realtime/lightrail/innerwest',
+    'lightrail_cbdse': f'{GTFS_V1}/realtime/lightrail/cbdandsoutheast',
 }
 _trip_update_cache = {}
 TRIP_UPDATE_CACHE_SECONDS = 20
 
-# stop id -> name, resolved through the trip planner. Only metro and light rail
-# need this: their feeds name a numeric stop id and nothing else, where heavy rail
-# spells the station out in its signal berth string. A lookup takes about 3s, so
-# they are resolved in the background and the cache is never expired - stop names
-# don't change while the server is up.
+# stop id -> name. only metro/light rail need this (heavy rail spells the
+# station out in its berth string). a lookup takes ~3s, so resolved in the
+# background; cache never expires - names don't change
 _stop_name_cache = {}
 _stop_name_pending = set()
 _stop_name_lock = threading.Lock()
 _stop_name_pool = ThreadPoolExecutor(max_workers=6)
-STOP_NAME_MAX_IDS = 60      # per request
-STOP_NAME_MAX_PENDING = 40  # in flight at once, so one bad batch can't flood TfNSW
+STOP_NAME_MAX_IDS = 60  # per request
+# in flight at once, so one bad batch can't flood TfNSW
+STOP_NAME_MAX_PENDING = 40
 
 
 @app.route("/")
@@ -93,13 +91,11 @@ def get_departures():
     if not stop_id:
         return jsonify({'error': 'stop_id is required'}), 400
 
-    # get current date and time in sydney timezone
     sydney_tz = pytz.timezone('Australia/Sydney')
     now = datetime.now(sydney_tz)
     itd_date = now.strftime('%Y%m%d')
     itd_time = now.strftime('%H%M')
 
-    # build tfnsw api request
     params = {
         'outputFormat': 'rapidJSON',
         'coordOutputFormat': 'EPSG:4326',
@@ -116,8 +112,8 @@ def get_departures():
         'Authorization': f'apikey {API_KEY}'
     }
 
-    # TfNSW returns the odd 5xx for no obvious reason. One quick retry turns most
-    # of those into a normal response instead of a visible error on the board.
+    # tfnsw returns the odd 5xx for no reason - one retry turns most of
+    # them into a normal response
     last_error = None
     for attempt in range(2):
         try:
@@ -139,7 +135,7 @@ def get_departures():
 
 @app.route('/api/stops', methods=['GET'])
 def get_stops():
-    """search for stops by name or stop id"""
+    # search for stops by name or stop id
     search_query = request.args.get('q', '').strip()
     if not search_query:
         return jsonify({'stops': []})
@@ -166,10 +162,13 @@ def get_stops():
         response.raise_for_status()
         data = response.json()
 
-        # stop_finder matches streets/POIs/suburbs too - keep actual stops only,
-        # ranked by TfNSW's own match confidence
+        # stop_finder matches streets/POIs/suburbs too - stops only
         stops = [
-            {'id': loc.get('id'), 'name': loc.get('name'), 'matchQuality': loc.get('matchQuality', 0)}
+            {
+                'id': loc.get('id'),
+                'name': loc.get('name'),
+                'matchQuality': loc.get('matchQuality', 0)
+            }
             for loc in data.get('locations', [])
             if loc.get('type') == 'stop' and loc.get('id') and loc.get('name')
         ]
@@ -189,7 +188,7 @@ def get_stops():
 
 
 def fetch_feed(feed_name):
-    """fetches and decodes one gtfs-realtime vehicle position feed into plain dicts"""
+    # decodes one gtfs-realtime vehicle position feed into plain dicts
     cached = _feed_cache.get(feed_name)
     if cached and time.time() - cached['at'] < FEED_CACHE_SECONDS:
         return cached['vehicles']
@@ -211,27 +210,32 @@ def fetch_feed(feed_name):
         v = entity.vehicle
         vehicles.append({
             'feed': feed_name,
-            # numeric gtfs stop id on metro/lightrail/nswtrains, but a signal berth
-            # string like "Sydney.Central 17 Loc" on sydneytrains - see CLAUDE.md
+            # numeric stop id on metro/lightrail/nswtrains, signal berth string
+            # ("Sydney.Central 17 Loc") on sydneytrains - see CLAUDE.md
             'stopId': v.stop_id if v.HasField('stop_id') else None,
-            # only populated on metro/lightrail/nswtrains, never on sydneytrains
-            'status': VEHICLE_STOP_STATUS.get(v.current_status) if v.HasField('current_status') else None,
-            # position within the trip, matched against a trip update's stop_sequence.
-            # lags the GPS by a stop fairly often, so treat it as a floor rather than
-            # the last word on where the vehicle has got to
-            'stopSequence': v.current_stop_sequence if v.HasField('current_stop_sequence') else None,
+            'status': (
+                VEHICLE_STOP_STATUS.get(v.current_status)
+                if v.HasField('current_status') else None
+            ),
+            # lags the gps by a stop fairly often - a floor, not the last word
+            'stopSequence': (
+                v.current_stop_sequence
+                if v.HasField('current_stop_sequence') else None
+            ),
             'routeId': v.trip.route_id if v.HasField('trip') else None,
             'tripId': v.trip.trip_id if v.HasField('trip') else None,
-            # used to follow one train from a platform to its next stop
             'vehicleId': v.vehicle.id if v.HasField('vehicle') else None,
-            # human-readable trip description, e.g. "17:14 Central Station to
-            # Leppington Station". The only place the feed names a destination.
+            # e.g. "17:14 Central Station to Leppington Station" - the
+            # only place the feed names a destination
             'label': v.vehicle.label if v.HasField('vehicle') else None,
             'lat': v.position.latitude if v.HasField('position') else None,
             'lon': v.position.longitude if v.HasField('position') else None,
-            # direction of travel in degrees. metro and light rail always send this,
-            # sydneytrains never does.
-            'bearing': v.position.bearing if v.HasField('position') and v.position.HasField('bearing') else None,
+            # sent by metro and light rail, never by sydneytrains
+            'bearing': (
+                v.position.bearing
+                if v.HasField('position')
+                and v.position.HasField('bearing') else None
+            ),
             'timestamp': v.timestamp if v.HasField('timestamp') else None,
         })
 
@@ -241,20 +245,22 @@ def fetch_feed(feed_name):
 
 @app.route('/api/vehicle-positions', methods=['GET'])
 def get_vehicle_positions():
-    """live vehicle positions, merged across one or more comma-separated feeds"""
-    requested = [f.strip() for f in request.args.get('feeds', '').split(',') if f.strip()]
+    # live vehicle positions, merged across one or more comma-separated feeds
+    raw_feeds = request.args.get('feeds', '')
+    requested = [f.strip() for f in raw_feeds.split(',') if f.strip()]
     if not requested:
-        return jsonify({'error': 'feeds is required', 'available': list(VEHICLE_FEEDS)}), 400
+        return jsonify({'error': 'feeds is required',
+                        'available': list(VEHICLE_FEEDS)}), 400
 
     unknown = [f for f in requested if f not in VEHICLE_FEEDS]
     if unknown:
-        return jsonify({'error': f'unknown feeds: {unknown}', 'available': list(VEHICLE_FEEDS)}), 400
+        return jsonify({'error': f'unknown feeds: {unknown}',
+                        'available': list(VEHICLE_FEEDS)}), 400
 
     vehicles = []
     errors = {}
 
-    # fetched in parallel - going one at a time took ~3s for all five feeds, which
-    # is longer than the gap between polls on the tactile bumps board
+    # parallel - sequential took ~3s for five feeds, longer than the poll gap
     with ThreadPoolExecutor(max_workers=len(requested)) as pool:
         futures = {pool.submit(fetch_feed, name): name for name in requested}
         for future in futures:
@@ -269,7 +275,7 @@ def get_vehicle_positions():
 
 
 def fetch_trip_updates(feed_name):
-    """fetches and decodes one gtfs-realtime trip update feed into trip_id -> stops"""
+    # decodes one gtfs-realtime trip update feed into trip_id -> stops
     cached = _trip_update_cache.get(feed_name)
     if cached and time.time() - cached['at'] < TRIP_UPDATE_CACHE_SECONDS:
         return cached['trips']
@@ -293,10 +299,15 @@ def fetch_trip_updates(feed_name):
         for stop in update.stop_time_update:
             # plenty of these carry no absolute time, only a delay
             arrival = stop.arrival.time if stop.HasField('arrival') else 0
-            departure = stop.departure.time if stop.HasField('departure') else 0
+            departure = (
+                stop.departure.time if stop.HasField('departure') else 0
+            )
             stops.append({
                 'stopId': stop.stop_id,
-                'sequence': stop.stop_sequence if stop.HasField('stop_sequence') else None,
+                'sequence': (
+                    stop.stop_sequence
+                    if stop.HasField('stop_sequence') else None
+                ),
                 'time': arrival or departure or None
             })
         if update.trip.trip_id:
@@ -308,8 +319,10 @@ def fetch_trip_updates(feed_name):
 
 @app.route('/api/trip-updates', methods=['GET'])
 def get_trip_updates():
-    """per-trip upcoming stops - trip_id joins directly to the vehicle positions feed"""
-    requested = [f.strip() for f in request.args.get('feeds', '').split(',') if f.strip()]
+    # per-trip upcoming stops - trip_id joins directly to the vehicle
+    # positions feed
+    raw_feeds = request.args.get('feeds', '')
+    requested = [f.strip() for f in raw_feeds.split(',') if f.strip()]
     if not requested:
         requested = ['sydneytrains']
 
@@ -321,10 +334,12 @@ def get_trip_updates():
     trips = {}
     errors = {}
 
-    # trip ids are unique across modes (each feed uses its own format), so merging
-    # them into one map is safe and saves the caller having to know which is which
+    # trip ids are unique across modes, so merging into one map is safe
     with ThreadPoolExecutor(max_workers=len(requested)) as pool:
-        futures = {pool.submit(fetch_trip_updates, name): name for name in requested}
+        futures = {
+            pool.submit(fetch_trip_updates, name): name
+            for name in requested
+        }
         for future in futures:
             feed_name = futures[future]
             try:
@@ -336,7 +351,7 @@ def get_trip_updates():
 
 
 def resolve_stop_name(stop_id):
-    """looks one stop id up through stop_finder and caches whatever comes back"""
+    # looks one stop id up through stop_finder and caches what comes back
     try:
         response = requests.get(
             f'{API_BASE_URL}/stop_finder',
@@ -352,11 +367,14 @@ def resolve_stop_name(stop_id):
         response.raise_for_status()
         locations = response.json().get('locations') or []
         top = locations[0] if locations else {}
-        # the short form is the one worth showing; a handful of ids resolve to
-        # nothing at all, and those get cached as blank so we stop asking
-        _stop_name_cache[stop_id] = top.get('disassembledName') or top.get('name') or ''
+        # blank for unresolvable ids, so they're cached too rather than
+        # retried forever
+        _stop_name_cache[stop_id] = (
+            top.get('disassembledName') or top.get('name') or ''
+        )
     except (requests.exceptions.RequestException, ValueError):
-        pass  # leave it unresolved - the next request will queue it again
+        # leave it unresolved - the next request will queue it again
+        pass
     finally:
         with _stop_name_lock:
             _stop_name_pending.discard(stop_id)
@@ -364,18 +382,21 @@ def resolve_stop_name(stop_id):
 
 @app.route('/api/stop-names', methods=['GET'])
 def get_stop_names():
-    """names for numeric stop ids, resolved in the background and cached forever"""
-    ids = [i.strip() for i in request.args.get('ids', '').split(',') if i.strip()]
+    # names for numeric stop ids, resolved in the background, cached forever
+    raw_ids = request.args.get('ids', '')
+    ids = [i.strip() for i in raw_ids.split(',') if i.strip()]
     ids = ids[:STOP_NAME_MAX_IDS]
 
     names = {i: _stop_name_cache[i] for i in ids if i in _stop_name_cache}
 
-    # anything still unknown gets queued. the caller polls anyway, so the names
-    # turn up a few seconds later rather than holding this response open
+    # unknown ids get queued, not resolved here - the caller polls again
+    # for the names
     with _stop_name_lock:
         room = STOP_NAME_MAX_PENDING - len(_stop_name_pending)
-        queue = [i for i in ids
-                 if i not in _stop_name_cache and i not in _stop_name_pending][:max(room, 0)]
+        fresh = [i for i in ids
+                 if i not in _stop_name_cache
+                 and i not in _stop_name_pending]
+        queue = fresh[:max(room, 0)]
         _stop_name_pending.update(queue)
 
     for stop_id in queue:
@@ -427,8 +448,7 @@ def map_tile():
 
 @app.route('/api/set-checker', methods=['GET'])
 def set_checker():
-    """carriage number -> set number, and the other way round. No upstream call:
-    the whole thing is the tables and rules in the setchecker package."""
+    # carriage number <-> set number - no upstream call, tables and rules only
     query = request.args.get('q', '')
     if not query.strip():
         return jsonify({'error': 'q is required'}), 400
@@ -437,7 +457,7 @@ def set_checker():
 
 @app.route('/api/set-checker/fleets', methods=['GET'])
 def set_checker_fleets():
-    """everything the checker covers, for the reference panel on the page"""
+    # everything the checker covers, for the reference panel on the page
     return jsonify(setchecker.catalogue())
 
 

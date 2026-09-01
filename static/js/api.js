@@ -1,7 +1,7 @@
 // master api module - all tfnsw requests go through the flask backend
 
-import * as m1Line from './m1Line.js';
-import * as centralPlatforms from './centralPlatforms.js';
+import * as m1Line from './m1-line.js';
+import * as centralPlatforms from './central-platforms.js';
 
 class TfNSWAPI {
     constructor() {
@@ -35,9 +35,8 @@ class TfNSWAPI {
         }
     }
 
-    // live gtfs-realtime vehicle positions, merged across the named feeds (see
-    // VEHICLE_FEEDS in app.py). { vehicles, errors } - check errors, don't assume
-    // a short list means a quiet feed
+    // merges vehicle positions across feeds. returns { vehicles, errors } - check
+    // errors, a short list doesn't mean a quiet feed
     async getVehiclePositions(feeds) {
         const list = Array.isArray(feeds) ? feeds : [feeds];
         try {
@@ -56,9 +55,7 @@ class TfNSWAPI {
         }
     }
 
-    // upcoming stops per trip, merged across the named feeds (see TRIP_UPDATE_FEEDS
-    // in app.py). trip_id joins to getVehiclePositions(), and this is the only
-    // published way to know a service's arrival platform ahead of time
+    // upcoming stops per trip - trip_id joins to getVehiclePositions()
     async getTripUpdates(feeds) {
         const list = Array.isArray(feeds) ? feeds : (feeds ? [feeds] : []);
         const query = list.length ? `?feeds=${encodeURIComponent(list.join(','))}` : '';
@@ -75,9 +72,8 @@ class TfNSWAPI {
         }
     }
 
-    // names for numeric stop ids. resolving one takes a few seconds, so the backend
-    // answers from its cache and looks the rest up in the background - expect a
-    // partial map on the first ask and the remainder on the next
+    // names for numeric stop ids - backend resolves slowly in the background, so
+    // expect a partial map first, the rest on a later ask
     async getStopNames(ids) {
         if (!ids || !ids.length) return { names: {}, pending: 0 };
         try {
@@ -86,8 +82,7 @@ class TfNSWAPI {
                 throw new Error(`API Error: ${response.status}`);
             }
             const data = await response.json();
-            // pending counts what the backend has gone away to resolve - ask again
-            // shortly rather than waiting for the next poll
+            // pending = still being resolved, worth asking again soon
             return { names: data.names || {}, pending: data.pending || 0 };
         } catch (error) {
             console.error('Error fetching stop names:', error);
@@ -95,10 +90,8 @@ class TfNSWAPI {
         }
     }
 
-    // carriage number -> set number, and set number -> formation. Nothing to do
-    // with tfnsw: the answer comes from composition tables and numbering rules held
-    // in the setchecker package on the backend. A "not found" is a normal answer
-    // with a reason attached, not an error
+    // carriage <-> set number - answered from the setchecker package, not tfnsw.
+    // a miss comes back as a normal {found: false, reason} answer, not an error
     async checkSet(query) {
         const response = await fetch(`${this.backendUrl}/set-checker?q=${encodeURIComponent(query)}`);
         if (!response.ok) {
@@ -107,7 +100,6 @@ class TfNSWAPI {
         return await response.json();
     }
 
-    // every fleet the set checker covers, for its reference panel
     async getSetCheckerFleets() {
         const response = await fetch(`${this.backendUrl}/set-checker/fleets`);
         if (!response.ok) {
@@ -128,16 +120,14 @@ class TfNSWAPI {
         data.stopEvents.forEach(event => {
             const departure = {
                 line: event.transportation?.number || 'Unknown',
-                // short code ("T1", "M1", "BMT") for compact line badges
+                // short code ("T1", "M1", "BMT") for compact badges
                 lineShort: event.transportation?.disassembledName || '',
                 destination: event.transportation?.destination?.name || 'Unknown',
-                // cancelled services are still returned by departure_mon, flagged two
-                // ways - both are checked because neither appears on its own reliably
+                // checks both cancellation flags - neither is reliable alone
                 isCancelled: event.isCancelled === true
                     || (Array.isArray(event.realtimeStatus) && event.realtimeStatus.includes('TRIP_CANCELLED')),
                 departureTime: event.departureTimePlanned || event.departureTimeEstimated,
-                // both exposed separately so callers that need the realtime figure
-                // (rather than the timetabled one) can prefer estimated
+                // kept separate so callers can prefer the realtime figure
                 departureTimePlanned: event.departureTimePlanned || null,
                 departureTimeEstimated: event.departureTimeEstimated || null,
                 platform: event.location?.properties?.platform,
@@ -162,7 +152,7 @@ class TfNSWAPI {
         return Math.round((estimatedTime - plannedTime) / 60000);
     }
 
-    // maps tfnsw's occupancy string (e.g. "many_seats") to a 1-3 crowding level, 0 if unknown
+    // converts tfnsw's occupancy string to a 1-3 crowding level, 0 if unknown
     getOccupancyLevel(occupancy) {
         if (!occupancy) return 0;
         const key = String(occupancy).toUpperCase();
@@ -172,7 +162,6 @@ class TfNSWAPI {
         return 0;
     }
 
-    // m1 line topology lives in m1Line.js - delegated here so design files keep calling api.<method>
     getStoppingPatternText(currentStation, destination, realStoppingPattern) {
         return m1Line.getStoppingPatternText(currentStation, destination, realStoppingPattern);
     }
@@ -193,15 +182,13 @@ class TfNSWAPI {
         return m1Line.getOppositeNextStop(station, destination);
     }
 
-    // short display form of a station name ("Tallawong Station, Tallawong" ->
-    // "Tallawong") - TfNSW's destination field isn't consistently short, e.g. a
-    // terminus's return-direction destination can come back in the full form
+    // shortens "Tallawong Station, Tallawong" -> "Tallawong" - tfnsw's destination
+    // field isn't always short
     shortStationName(name) {
         return m1Line.normalizeStationName(name);
     }
 
-    // central station platform data lives in centralPlatforms.js - delegated here
-    // for the same reason as m1Line above
+    // delegates to central-platforms.js
     getCentralPlatform(id) {
         return centralPlatforms.getPlatform(id);
     }
@@ -239,23 +226,22 @@ class TfNSWAPI {
     }
 
     // sydney trains route ids are internal sector codes, not line codes - not
-    // published by tfnsw, worked out by checking each sector's real destinations
-    // (APS only ever runs Campbelltown/Macarthur/Revesby = T8, etc). CTY/RTTA have
-    // no line and stay unlabelled on purpose.
+    // published by tfnsw, worked out from each sector's real destinations
+    // (APS only ever runs Campbelltown/Macarthur/Revesby = T8). CTY/RTTA stay unlabelled
     static SECTOR_LINES = {
         APS: 'T8', ESI: 'T4', NSN: 'T1', NTH: 'T9', WST: 'T1',
         CMB: 'T5', OLY: 'T7', IWL: 'T2',
         BMT: 'BMT', CCN: 'CCN', SCO: 'SCO', SHL: 'SHL', HUN: 'HUN'
     };
 
-    // metro and light rail put the line straight in the route id (SMNW_M1, 1001_L2,
-    // IWLR-191). Heavy rail needs the sector lookup above.
+    // metro/light rail put the line straight in the route id (SMNW_M1, 1001_L2);
+    // heavy rail needs the sector lookup above
     getLineCodeFromRouteId(routeId) {
         const id = String(routeId || '').toUpperCase();
         if (!id) return null;
         if (id.includes('IWLR')) return 'L1';
 
-        // split on separators - "1001_L2" has no word boundary before the L
+        // splits on separators - "1001_L2" has no word boundary before the L
         const tokens = id.split(/[^A-Z0-9]+/).filter(Boolean);
         const explicit = tokens.find(t =>
             /^T[1-9]$/.test(t) || /^M[1-9]$/.test(t) || /^L[1-4]$/.test(t));
@@ -265,9 +251,9 @@ class TfNSWAPI {
         return sector ? TfNSWAPI.SECTOR_LINES[sector] : null;
     }
 
-    // categorizes a departure into one of six modes, for the multi-select filter.
-    // product.class alone is ambiguous (suburban/intercity trains share class 1),
-    // so this reads product name first and only falls back to the line prefix
+    // sorts a departure into one of six modes for the filter. product.class is
+    // ambiguous (suburban/intercity trains share class 1) - reads product name
+    // first, falls back to the line prefix
     getModeCategory(dep) {
         const productName = (dep.productName || '').toLowerCase();
         const line = (dep.line || '').toLowerCase();
@@ -315,9 +301,8 @@ class TfNSWAPI {
         return Math.round((departure - new Date()) / 60000);
     }
 
-    // 3-icon crowding indicator markup, filled up to level (0-3). Empty string
-    // when there's no occupancy data at all (level 0), rather than 3 outline
-    // icons that imply "empty train" when it really means "unknown"
+    // builds 3-icon crowding markup, filled to level. empty string at 0 - not 3
+    // outline icons, which would read as "empty train" instead of "unknown"
     renderOccupancyIcons(level) {
         if (!level) return '';
         let html = '<div class="occupancy-icons" aria-label="crowding level">';
@@ -344,10 +329,9 @@ class TfNSWAPI {
             F1: '--f1', F2: '--f2', F3: '--f3', F4: '--f4', F5: '--f5',
             F6: '--f6', F7: '--f7', F8: '--f8', F9: '--f9', Stockton: '--stockton',
             L1: '--l1', L2: '--l2', L3: '--l3', L4: '--l4', NLR: '--nlr',
-            // M1 must be listed explicitly - the short code alone doesn't contain
-            // "metro", so it would otherwise fall through to the default colour
+            // needed explicitly - "M1" doesn't contain "metro", so it'd miss the default
             M1: '--metro',
-            // intercity lines are branded as the suburban line they share track with
+            // intercity lines branded as the suburban line they share track with
             BMT: '--t1', CCN: '--t9', SCO: '--t4', SHL: '--t8',
             Metro: '--metro', SydneyTrains: '--sydneytrains', NSWTL: '--nswtl',
             Bus: '--bus', LightRail: '--lightrail', Ferry: '--ferry'

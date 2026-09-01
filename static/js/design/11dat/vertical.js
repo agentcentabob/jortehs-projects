@@ -1,5 +1,5 @@
 import api from '../../api.js';
-import * as common from './boardCommon.js';
+import * as common from './board-common.js';
 
 const ROWS_PER_PLATFORM = 3;
 
@@ -42,8 +42,7 @@ class VerticalBoard {
         this.updateHeaderTime();
         setInterval(() => this.updateHeaderTime(), 1000);
 
-        // kiosk deployments load via ?stop_id= - otherwise the search bar
-        // always starts empty, no restoring the last station searched
+        // kiosk deployments load via ?stop_id=
         const params = new URLSearchParams(window.location.search);
         const urlStopId = params.get('stop_id');
         if (urlStopId) {
@@ -83,8 +82,7 @@ class VerticalBoard {
         common.displayStationInfo(this);
     }
 
-    // reverts the board to its initial empty state - used when a station turns out not to be metro.
-    // the board itself always stays visible (outline included) - only the message inside changes
+    // resets to the empty state - board itself stays visible, only the message changes
     resetToEmptyState() {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
@@ -96,14 +94,13 @@ class VerticalBoard {
         this.showNoDepartures(this.platform2List);
     }
 
-    // the station is real and on the M1, but the Bankstown extension segment
-    // it's part of isn't carrying passengers yet
+    // station is real and on the M1, just not open yet (Bankstown extension)
     showLineOpeningSoon() {
         this.allDepartures = [];
         this.clearPlatformHeaders();
-        this.showNoDepartures(this.platform1List, 'No services running currently - line opening soon');
-        this.showNoDepartures(this.platform2List, 'No services running currently - line opening soon');
-        this.updateTicker();
+        this.showNoDepartures(this.platform1List, 'No service (line opening soon)');
+        this.showNoDepartures(this.platform2List, 'No service (line opening soon)');
+        this.updateTicker(true);
         this.displayStationInfo();
     }
 
@@ -115,9 +112,8 @@ class VerticalBoard {
     }
 
     renderBoard() {
-        // a valid station can still have nothing running right now (e.g. late
-        // night) - platforms can't be labelled with no departures to group by, so
-        // show the message in the departures area itself rather than a fake shell
+        // nothing running (e.g. late night) - no departures to group platforms by,
+        // so show the message directly instead of a fake shell
         if (this.allDepartures.length === 0) {
             this.clearPlatformHeaders();
             this.showNoDepartures(this.platform1List);
@@ -144,10 +140,8 @@ class VerticalBoard {
             const realPlatform2 = sortedPlatforms[1];
             this.renderRealPlatform(this.platform2HeaderTitle, this.platform2NextStop, this.platform2List, realPlatform2, platformGroups[realPlatform2]);
         } else {
-            // only one active platform right now (a genuine terminus, or the
-            // other direction runs into the unopened Bankstown extension) -
-            // work out what the other platform should say instead of just
-            // repeating platform 1's data
+            // only one active platform - work out what the other should say
+            // instead of just repeating platform 1's data
             this.renderMissingPlatform(realPlatform1, platformGroups[realPlatform1]);
         }
 
@@ -174,7 +168,7 @@ class VerticalBoard {
         } else if (!api.isM1StationOpen(neighbor)) {
             // the other direction leads straight into the unopened Bankstown extension
             this.platform2NextStop.textContent = `Next stop ${neighbor}`;
-            this.showNoDepartures(this.platform2List, 'No services running currently - line opening soon');
+            this.showNoDepartures(this.platform2List, 'No service (line opening soon)');
         } else {
             // an open segment with genuinely no current data - rare, generic fallback
             this.platform2NextStop.textContent = `Next stop ${neighbor}`;
@@ -186,8 +180,8 @@ class VerticalBoard {
         listEl.innerHTML = `<p class="no-departures">${api.escapeHtml(message)}</p>`;
     }
 
-    // next stop for a platform - derived from its first departure's direction,
-    // since a platform's queued departures all run the same way (see m1Line.js)
+    // derived from the first departure's direction - a platform's queued
+    // departures all run the same way (see m1-line.js)
     updateNextStop(el, departures) {
         if (!el) return;
         const dest = departures && departures[0] ? departures[0].destination : null;
@@ -196,17 +190,22 @@ class VerticalBoard {
     }
 
     // welcome ticker above the top platform display
-    updateTicker() {
+    updateTicker(openingSoon = false) {
         if (!this.boardTicker) return;
 
         // station name only, no suburb (e.g. "Central Station, Sydney" -> "Central Station")
         const shortStationName = (this.stopName || '').split(',')[0].trim();
 
-        // line names come from the live departures, so this stays correct as tfnsw extends the line
-        const lines = [...new Set(this.allDepartures.map(dep => dep.line).filter(Boolean))];
-        const message = lines.length > 0
-            ? `Welcome to ${shortStationName}. Good service on ${lines.join(', ')}.`
-            : `Welcome to ${shortStationName}.`;
+        let message;
+        if (openingSoon) {
+            message = `Welcome to ${shortStationName}. No service (line opening soon).`;
+        } else {
+            // line names come from the live departures, so this stays correct as tfnsw extends the line
+            const lines = [...new Set(this.allDepartures.map(dep => dep.line).filter(Boolean))];
+            message = lines.length > 0
+                ? `Welcome to ${shortStationName}. Good service on ${lines.join(', ')}.`
+                : `Welcome to ${shortStationName}.`;
+        }
 
         this.setScrollingText(this.boardTicker, message);
     }
@@ -251,7 +250,7 @@ class VerticalBoard {
 
         main.appendChild(destLine);
 
-        // tfnsw doesn't provide real stopping-pattern data for metro - see m1Line.js
+        // tfnsw has no real stopping-pattern data for metro - see m1-line.js
         const badgeEl = document.createElement('div');
         badgeEl.className = 'row-badge';
         badgeEl.textContent = api.getStoppingPatternText(this.stopName, dep.destination, dep.stoppingPattern);
@@ -259,10 +258,9 @@ class VerticalBoard {
 
         row.appendChild(main);
 
-        // occupancy/time are direct grid children so their widths stay fixed
-        // regardless of how wide the time text is. renderOccupancyIcons can
-        // return '' (no data) - still append a bare div so the 3-column grid
-        // keeps its structure and row-time doesn't shift into the wrong column
+        // occupancy/time are direct grid children so widths stay fixed. falls back
+        // to a bare div when renderOccupancyIcons returns '', so the 3-column grid
+        // keeps its structure
         const occupancyEl = document.createElement('div');
         occupancyEl.innerHTML = api.renderOccupancyIcons(api.getOccupancyLevel(dep.occupancy));
         row.appendChild(occupancyEl.firstElementChild || document.createElement('div'));

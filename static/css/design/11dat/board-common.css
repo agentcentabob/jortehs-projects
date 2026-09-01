@@ -1,10 +1,7 @@
-/* Shared chrome for the 11dat metro boards (horizontal.css, vertical.css) -
-   page container, header, search box + suggestions, buttons, status line, and
-   the no-departures message. Board-specific layout (the departure board
-   itself, its rows, occupancy icons, fadeIn/blink timings, etc.) stays in
-   each board's own file - a couple of those looked identical at a glance but
-   actually use different values (e.g. fadeIn's translateY offset), so they
-   were deliberately left alone rather than merged. */
+/* shared chrome for horizontal.css/vertical.css - header, search, buttons,
+   status, no-departures. board-specific layout (rows, occupancy, timings) stays
+   in each board's own file - some values look identical but differ (e.g. fadeIn's
+   translateY), so left unmerged on purpose */
 
 .container {
     max-width: 1400px;
@@ -153,6 +150,9 @@ button:active {
 }
 .error {
     color: var(--major);
+}
+.warning {
+    color: var(--minor);
 }
 
 /* fills and centers within its list, in place of departure rows, whenever

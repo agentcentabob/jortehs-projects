@@ -19,14 +19,9 @@
             </div>
         </header>
 
-        <p class="intro">
-            LED-backed tactile ground surface indicators that change colour relative to the next service, improving accessibility and safety for all users.
-            Driven by live Transport for NSW vehicle position data.
-        </p>
-
         <div class="board-layout">
             <section class="tile tile-scene">
-                <h2 class="tile-title">Platform edge display</h2>
+                <h2 class="tile-title">Platform edge simulation</h2>
                 <div class="platform-scene">
                     <div class="trackside">
                         <span class="trackside-label">track</span>
@@ -52,9 +47,7 @@
             <section class="tile key" id="keySection">
                 <h2 class="tile-title">Key</h2>
                 <p class="key-intro">
-                    The simple logic behind each colour and pattern shown on the tactile bumps.
-                    The muted control marks the state currently showing: select any control to hold
-                    that state, and select it again to return to live data.
+                    Logic behind each LED state and corresponding vehicle status. Select any state to demonstrate it on the simulation, and select it again to return to live data.
                 </p>
 
                 <ul class="key-list">
@@ -62,13 +55,13 @@
                         <span class="key-led led-idle"></span>
                         <span class="key-state">Steady yellow</span>
                         <button type="button" class="key-demo-btn" data-state="idle" aria-label="Hold the 'no vehicle' state"></button>
-                        <p class="key-meaning">No vehicle at the platform. Standard tactile indicator colour.</p>
+                        <p class="key-meaning">No vehicle at the platform. Default colour.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-alert"></span>
                         <span class="key-state">Flashing red / orange</span>
                         <button type="button" class="key-demo-btn" data-state="arriving" aria-label="Hold the 'vehicle arriving' state"></button>
-                        <p class="key-meaning">Vehicle arriving. Begins as it approaches and continues about 10 seconds after it reaches the platform.</p>
+                        <p class="key-meaning">Vehicle arriving. Begins as it approaches and continues briefly upon reaching the platform.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-open"></span>
@@ -80,25 +73,25 @@
                         <span class="key-led led-arrived"></span>
                         <span class="key-state">Steady green</span>
                         <button type="button" class="key-demo-btn" data-state="arrived" aria-label="Hold the 'doors open' state"></button>
-                        <p class="key-meaning">Doors open, safe to board.</p>
+                        <p class="key-meaning">Doors open.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-closing"></span>
                         <span class="key-state">Flashing red / yellow</span>
                         <button type="button" class="key-demo-btn" data-state="closing" aria-label="Hold the 'doors closing' state"></button>
-                        <p class="key-meaning">Doors closing. Starts shortly before the scheduled departure, or once the doors have been open long enough for the mode, whichever is later, then runs for 5 seconds. A train dwells far longer than a metro or tram, so the wait differs by platform.</p>
+                        <p class="key-meaning">Doors closing. Starts shortly before the scheduled departure, or after a given time depending on mode, whichever is later. Runs for 5 seconds.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-departing"></span>
                         <span class="key-state">Steady red</span>
                         <button type="button" class="key-demo-btn" data-state="departing" aria-label="Hold the 'vehicle departing' state"></button>
-                        <p class="key-meaning">Vehicle departing. Runs from the moment the doors finish closing until it has pulled clear of the platform.</p>
+                        <p class="key-meaning">Vehicle departing. Runs from the doors closing until it is clear of the platform.</p>
                     </li>
                     <li class="key-item">
                         <span class="key-led led-constant"></span>
                         <span class="key-state">Steady blue</span>
                         <span class="key-demo-spacer"></span>
-                        <p class="key-meaning">The four lower rows. A fixed reference band that never changes, marking the edge itself.</p>
+                        <p class="key-meaning">The four lower rows. A fixed reference band that never changes, and would not use LEDs.</p>
                     </li>
                 </ul>
             </section>
@@ -131,8 +124,7 @@
                     </div>
                     <div class="info-cell">
                         <span class="info-label">Vehicle status</span>
-                        <!-- the phase changes on its own as the vehicle moves, so it
-                             is announced rather than silently replaced -->
+                        <!-- aria-live: the phase changes on its own, not from user action -->
                         <strong id="infoStatus" aria-live="polite">Connecting...</strong>
                         <span class="info-vehicle" id="infoVehicle"></span>
                         <!-- hover or focus for the platform, location and route id -->
@@ -147,9 +139,7 @@
 
             <section class="tile map-section">
                 <h2 class="tile-title">Live vehicle positions</h2>
-                <p class="map-intro" id="mapIntro">
-                    Vehicles currently reported on this platform's feed, plotted by GPS position.
-                </p>
+                <p class="map-intro" id="mapIntro"></p>
                 <div class="map-pair">
                     <div class="map-frame">
                         <svg id="trainMap" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid slice"
@@ -168,10 +158,10 @@
 
         <p class="key-reference">
             Live data from the
-            <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW Open Data Hub</a>
-            (Trip Planner <code>departure_mon</code> and GTFS-realtime Vehicle Positions).
+            <a href="https://opendata.transport.nsw.gov.au/" target="_blank" rel="noopener">Transport for NSW OpenData Hub</a>
+            (Trip Planner <code>departure_mon</code> and <code>stop_finder</code>, GTFS-realtime Vehicle Positions and Trip Updates).
             Map imagery &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
-            <br>Some data derived, including vehicle door state (lack of API reporting) and line numbers (complexity of request).
+            <br>Some data derived, including vehicle door state (lack of API reporting) and line numbers.
         </p>
     </div>
 

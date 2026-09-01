@@ -12,6 +12,8 @@ settings.local.json
 
 # other
 todo.md
+__pycache__/
+*.pyc
 
 # other (unused)
 ##.DS_Store

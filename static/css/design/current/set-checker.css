@@ -297,8 +297,7 @@ header h1 {
     margin-bottom: 4px;
 }
 
-/* the searched car is marked by the operator's brand colour alone - a second
-   background tone would be one more colour that isn't in the palette */
+/* marks the searched car with the operator's brand colour, no extra tone */
 .car-match {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent);

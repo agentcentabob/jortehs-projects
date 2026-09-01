@@ -1,12 +1,13 @@
-"""Descriptions of each fleet the checker knows, and how its numbering works.
-
-Two kinds of fleet live here. The rule-based ones (A, B, D, H) carry their set
-number inside the carriage number, so the whole formation can be worked back out
-from the numbering alone. The table-based ones (T, M, K) can't - see compositions.py.
-
-`formation` is in car order, front to back, and is what both the "which car is
-this" answer and the derived formation diagram are built from.
-"""
+# Descriptions of each fleet the checker knows, and how its numbering
+# works.
+#
+# Two kinds of fleet live here. The rule-based ones (A, B, D, H) carry
+# their set number inside the carriage number, so the whole formation can
+# be worked back out from the numbering alone. The table-based ones
+# (T, M, K) cannot - see compositions.py.
+#
+# `formation` is in car order, front to back, and is what both the "which
+# car is this" answer and the derived formation diagram are built from.
 
 # fleets whose set number falls out of the carriage number
 RULE_FLEETS = {
@@ -19,7 +20,8 @@ RULE_FLEETS = {
         'introduced': '2011',
         'operator': 'Sydney Trains',
         'service': 'Suburban',
-        'rule': 'The last two digits of any Waratah carriage number are the set number.',
+        'rule': 'The last two digits of any Waratah carriage number are '
+                'the set number.',
         'examples': ['D6312', 'N5312', 'T6512'],
         'formation': [
             {'prefix': 'D63', 'type': 'driving trailer'},
@@ -41,7 +43,8 @@ RULE_FLEETS = {
         'introduced': '2018',
         'operator': 'Sydney Trains',
         'service': 'Suburban',
-        'rule': 'The last two digits of any Waratah Series 2 carriage number are the set number.',
+        'rule': 'The last two digits of any Waratah Series 2 carriage '
+                'number are the set number.',
         'examples': ['D1105', 'N1705', 'T1305'],
         'formation': [
             {'prefix': 'D11', 'type': 'driving trailer'},
@@ -62,7 +65,8 @@ RULE_FLEETS = {
         'builder': 'Hyundai Rotem',
         'operator': 'NSW TrainLink',
         'service': 'Intercity (New Intercity Fleet)',
-        'rule': 'The last two digits of any Mariyung carriage number are the set number.',
+        'rule': 'The last two digits of any Mariyung carriage number are '
+                'the set number.',
         'examples': ['DD9704', 'DN8504', 'DDA9304'],
         'formation': [
             {'prefix': 'DD97', 'type': 'driving trailer'},
@@ -79,7 +83,8 @@ RULE_FLEETS = {
         'builder': 'Hyundai Rotem',
         'operator': 'NSW TrainLink',
         'service': 'Intercity (New Intercity Fleet)',
-        'rule': 'The last two digits of any Mariyung carriage number are the set number.',
+        'rule': 'The last two digits of any Mariyung carriage number are '
+                'the set number.',
         'examples': ['DD9804', 'DNL8804', 'DDA9404'],
         'formation': [
             {'prefix': 'DD98', 'type': 'driving trailer'},
@@ -99,11 +104,12 @@ RULE_FLEETS = {
         'introduced': '2006',
         'operator': 'NSW TrainLink',
         'service': 'Outer suburban / intercity',
-        'rule': 'Each OSCAR carriage prefix counts its own way - see the working below.',
+        'rule': 'Each OSCAR carriage prefix counts its own way - see the '
+                'working below.',
         'examples': ['ON5912', 'ONL5962', 'OD6925'],
-        # unlike the other rule fleets this isn't the car order - it's every prefix
-        # OSCARs use, across both variants (H1-H49 run the 59 series motors, H50-H55
-        # the 58 series). Car order comes from _oscar_formation() instead.
+        # not car order like the other rule fleets - every prefix OSCARs
+        # use across
+        # both variants. car order comes from _oscar_formation() instead
         'formation': [
             {'prefix': 'OD69', 'type': 'driving trailer'},
             {'prefix': 'ONL59', 'type': 'non-driving motor with lavatory'},
@@ -114,7 +120,7 @@ RULE_FLEETS = {
     },
 }
 
-# fleets that need a composition table, keyed by the prefix their set numbers use
+# fleets that need a composition table, keyed by their set number prefix
 TABLE_FLEETS = {
     'T': {
         'code': 'T',
@@ -125,7 +131,8 @@ TABLE_FLEETS = {
         'introduced': '1988',
         'operator': 'Sydney Trains',
         'service': 'Suburban',
-        'rule': 'Tangara carriage numbers say nothing about the set - it comes from a composition table.',
+        'rule': 'Tangara carriage numbers say nothing about the set - it '
+                'comes from a composition table.',
         'examples': ['D6105', 'N5105', 'D6840'],
         'carriagePrefixes': {'D': 'driving trailer', 'N': 'non-driving motor'},
     },
@@ -138,7 +145,8 @@ TABLE_FLEETS = {
         'introduced': '2002',
         'operator': 'Sydney Trains',
         'service': 'Suburban',
-        'rule': 'Millennium carriage numbers say nothing about the set - it comes from a composition table.',
+        'rule': 'Millennium carriage numbers say nothing about the set - '
+                'it comes from a composition table.',
         'examples': ['D1001', 'N1501', 'D1072'],
         'carriagePrefixes': {'D': 'driving trailer', 'N': 'non-driving motor'},
     },
@@ -151,7 +159,8 @@ TABLE_FLEETS = {
         'introduced': '1981',
         'operator': 'Sydney Trains',
         'service': 'Suburban',
-        'rule': 'K set carriage numbers say nothing about the set - it comes from a composition table.',
+        'rule': 'K set carriage numbers say nothing about the set - it '
+                'comes from a composition table.',
         'examples': ['C3510', 'T4176', 'C3577'],
         'carriagePrefixes': {'C': 'driving motor', 'T': 'non-driving trailer'},
     },

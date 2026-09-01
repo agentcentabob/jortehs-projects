@@ -43,7 +43,6 @@ class DigitalBoard {
             }
         });
 
-        // close suggestions/filter panel when clicking outside
         document.addEventListener('click', (e) => {
             if (e.target !== this.stopInput) {
                 this.suggestionsEl.style.display = 'none';
@@ -72,8 +71,7 @@ class DigitalBoard {
         this.searchTimeout = setTimeout(async () => {
             try {
                 const stops = await api.searchStops(query);
-                // cached so loadDepartures() can reuse this search instead of
-                // re-hitting /api/stops for text the user just typed
+                // caches so loadDepartures() can reuse this search, not re-hit /api/stops
                 this.lastSearchQuery = query;
                 this.lastSearchResults = stops;
                 this.displaySuggestions(stops);
@@ -121,8 +119,7 @@ class DigitalBoard {
         if (!(this.stopId && this.stopName === inputValue)) {
             this.showStatus('Looking up station...', 'loading');
             try {
-                // reuse the suggestions search if it was for this exact text, rather
-                // than hitting /api/stops again for a query already in hand
+                // reuses the suggestions search if it matches, rather than re-fetching
                 const stops = this.lastSearchQuery === inputValue && this.lastSearchResults
                     ? this.lastSearchResults
                     : await api.searchStops(inputValue);

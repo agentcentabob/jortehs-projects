@@ -1,5 +1,5 @@
 // platform-edge indicators driven by live vehicle positions. hardcoded to
-// central station - picker selects platform only. platform data: centralPlatforms.js
+// central station - picker selects platform only. platform data: central-platforms.js
 
 import api from '../../api.js';
 
@@ -12,31 +12,19 @@ const TICK_MS = 250;        // re-derive phase often enough for the fixed timing
 const CLOSING_MS = 5000;             // doors take ~5s to close
 const DEPARTING_MAX_MS = 120000;     // safety cap: vehicle still in feed but never left
 const DEPARTING_LOST_MS = 45000;     // shorter cap: vehicle vanished from feed
-// anything takes a few seconds to physically clear a platform, and positions run
-// about a minute stale on top of that, so the feed saying "gone" the instant the
-// doors shut isn't evidence it has. Without this the departing lights could show
-// for two seconds and be missed entirely.
+// floor so departing shows for at least a couple of seconds - positions run ~1min
+// stale, so "gone" the instant the doors shut isn't evidence it has
 const DEPARTING_MIN_MS = 6000;
 
-// The dwell has to be modelled per mode. A train sits at Central for a minute or
-// more, a metro turns round in about 45 seconds and a tram in less, so a single
-// 60s doors-open floor held metro and light rail doors open long after the real
-// ones had shut.
-//
-// The two distances only apply where there are no signal berths to read instead.
-// Heavy rail has them and they are a far better signal, so it uses null for both:
-// approachingM would otherwise light "arriving" for any train that happens to be
-// near Central, and clearOfPlatformM is what tells metro and light rail the vehicle
-// has actually gone - without it "departing" ran the full safety cap every time.
-// doorsOpenMax caps the whole thing. The scheduled departure can't be confirmed as
-// belonging to the vehicle actually standing there (run numbers change at Central),
-// so a tram with doors open and a timetabled departure five minutes off would
-// otherwise sit on "doors open" for the whole five minutes.
-// Metro's dwell was measured off the live feed rather than guessed: two trains at
-// Central both reported STOPPED_AT across 24-25s, so the whole sequence is built to
-// land at about 30s. Heavy rail keeps the original, longer model.
+// per-mode dwell model - a train sits at Central a minute+, a metro ~45s, a tram
+// less, so one shared doors-open floor held metro/light rail doors open too long.
+// approachingM/clearOfPlatformM apply only where there's no berth to read instead
+// (heavy rail has berths, so both are null there). doorsOpenMax caps how long doors
+// can be shown open, since the departure shown can't be confirmed as this vehicle's
+// (run numbers change at Central). metro's timing was measured live (two trains
+// both reported STOPPED_AT across 24-25s); heavy rail keeps the original model
 const MODE_TIMINGS = {
-    'train':      { arrivingHold: 10000, opening: 10000, doorsOpenMin: 60000, doorsOpenMax: 180000, closeBefore: 30000, approachingM: null, clearOfPlatformM: null },
+    'train':      { arrivingHold: 5000,  opening: 10000, doorsOpenMin: 60000, doorsOpenMax: 180000, closeBefore: 30000, approachingM: null, clearOfPlatformM: null },
     'metro':      { arrivingHold: 4000,  opening: 6000,  doorsOpenMin: 15000, doorsOpenMax: 45000,  closeBefore: 12000, approachingM: 300,  clearOfPlatformM: 200 },
     'light rail': { arrivingHold: 3000,  opening: 5000,  doorsOpenMin: 12000, doorsOpenMax: 40000,  closeBefore: 10000, approachingM: 150,  clearOfPlatformM: 100 }
 };
@@ -48,10 +36,8 @@ const MAX_POSITION_AGE_S = 120;
 const PLATFORM_ABSENCE_GRACE_MS = 20000; // berth can go unreported this long before dwell ends
 const MIN_MOVE_FOR_BEARING_M = 25;       // min movement between polls to trust a derived heading
 const AT_PLATFORM_M = 75;                // close enough to call it "at" when the feed won't say so
-// Looser check for when the trip's timing is the signal rather than the feed's
-// status. A compromise: a metro measured 118m from the platform coordinate while
-// demonstrably stopped at it, so this has to clear that, but every metre added is a
-// metre where a late train could be called "arrived" while still rolling in.
+// looser radius for when the trip's timing is the signal, not the feed's status -
+// a metro measured 118m out while demonstrably stopped, so this has to clear that
 const AT_PLATFORM_BY_TIME_M = 200;
 
 const DEFAULT_PLATFORM = 'p16';
@@ -123,11 +109,9 @@ let dwellDepartureMatched = false;
 let freshSelection = false;
 // true when the dwell was already under way before we started watching
 let joinedMidDwell = false;
-// The vehicle that just finished a dwell here. For a while after pulling out it can
-// still name this platform as its stop while sitting inside the approach radius -
-// seen 83m out and still reporting Central - which otherwise reads as a fresh
-// arrival seconds after it left. Keyed to the vehicle, so a following service is
-// unaffected.
+// vehicle that just finished a dwell here - blocks it re-reading as arriving for a
+// while after leaving (seen still naming this platform 83m out). keyed to the
+// vehicle, so a following service is unaffected
 let justDepartedKey = null;
 let justDepartedAt = null;
 const REARRIVAL_BLOCK_MS = 90000;
@@ -267,8 +251,6 @@ function liveVehicles() {
     return vehicles.filter(v => positionAge(v) <= MAX_POSITION_AGE_S);
 }
 
-// metro and light rail send a heading; sydneytrains never does, so for those we
-// compare against where the vehicle was last poll and work it out ourselves
 // compass bearing from one point to another, 0 = north
 function bearingBetween(lat1, lon1, lat2, lon2) {
     const north = lat2 - lat1;
@@ -276,6 +258,8 @@ function bearingBetween(lat1, lon1, lat2, lon2) {
     return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
 }
 
+// metro/light rail send a bearing directly; sydneytrains never does, so derive one
+// by comparing consecutive polls
 function headingFor(vehicle) {
     if (typeof vehicle.bearing === 'number') return vehicle.bearing;
 
@@ -292,9 +276,8 @@ function headingFor(vehicle) {
         }
     }
 
-    // Nothing to compare against yet. sydneytrains sends no bearing, so its arrows
-    // would otherwise stay blank until a second poll has been and gone - point it
-    // at the platform its trip says it is heading for instead.
+    // nothing to compare against yet - point at the booked platform instead of
+    // leaving the arrow blank until a second poll
     const next = upcomingCentralStop(vehicle);
     if (next && next.platform.coord && typeof vehicle.lat === 'number') {
         return bearingBetween(
@@ -344,10 +327,8 @@ function primaryVehicle() {
     return findRelevantVehicle().vehicle;
 }
 
-// Close enough that a metro or tram counts as arriving. Heavy rail uses its run-in
-// berth instead, which says the same thing far more reliably. The radii are set to
-// light up roughly 30 seconds out: a metro covers 430m in about 50s, and warning a
-// full minute ahead is the sort of thing people learn to ignore.
+// close enough that a metro/tram counts as arriving - heavy rail uses its run-in
+// berth instead. radii tuned to light up ~30s out
 function withinApproach(vehicle) {
     const limit = timings().approachingM;
     if (!limit) return false;
@@ -400,12 +381,9 @@ function findRelevantVehicle() {
         if (runIn) return { vehicle: runIn, where: 'approach' };
     }
 
-    // Everything above rests on the vehicle's own stop id, and for metro and light
-    // rail that names the station it last left right up until it stops here - a
-    // metro 11m from platform 26 still reported Waterloo. So a stop-id match only
-    // fires once it has already arrived, which is why the lights never showed one
-    // approaching. The trip update names the booked platform correctly from 400m+
-    // out, so that is what approach detection actually runs on.
+    // metro/light rail stop ids name the station last left, not the next one, right
+    // up until arrival (a metro 11m out still reported Waterloo) - so approach
+    // detection runs on the trip update's booked platform instead, correct from 400m+
     const booked = bookedForPlatform(fresh);
     const nearing = booked.filter(withinApproach);
     if (nearing.length) return { vehicle: closestToPlatform(nearing), where: 'approach' };
@@ -418,9 +396,8 @@ function findRelevantVehicle() {
         }
     }
 
-    // nothing here or close by, but the trip updates may still name the next one
-    // booked in. Too far off to light anything up - this only gives the panel
-    // something to say, so the vehicle details aren't blank until it pulls in.
+    // too far off to light anything - just gives the panel something to say
+    // instead of sitting blank until a vehicle pulls in
     if (booked.length) return { vehicle: closestToPlatform(booked), where: 'inbound' };
 
     return { vehicle: null, where: 'none' };
@@ -563,10 +540,8 @@ function countdownPhrase() {
     const seconds = secondsUntilNextDeparture();
     if (seconds === null) return '';
 
-    // "departing" claims this timetabled service is the vehicle standing here, so
-    // only say it when the trip data actually confirms that. Otherwise it reads as
-    // a countdown for a metro that is plainly about to pull out - "departing in
-    // 9 min" while the doors are closing in front of you.
+    // "departing" claims this timetabled service is the vehicle standing here -
+    // only say it when confirmed, or a metro closing its doors reads "departing in 9 min"
     const prefix = AT_PLATFORM_PHASES.includes(phase) && serviceIsConfirmed(shownDeparture())
         ? 'departing'
         : 'departs';
@@ -603,10 +578,9 @@ function readableTextOn(hexColor) {
     return luminance > 0.45 ? '#000' : '#fff';
 }
 
-// The timetable can't be tied to the vehicle present in general - run numbers change
-// at Central. But when the feed tells us which line the vehicle is running and where
-// it terminates, that picks its own row out of the departure list, which is what
-// stops an L2 to Randwick being captioned over an L3 sitting at the platform.
+// run numbers change at Central, so the timetable can't be tied to the vehicle in
+// general - but line + terminus picks its own row, stopping an L2 to Randwick
+// being captioned over an L3 sitting at the platform
 function departureForVehicle(vehicle) {
     if (!vehicle || !departures.length) return null;
 
@@ -625,9 +599,8 @@ function departureForVehicle(vehicle) {
     return departures.find(d => sameLine(d) && sameDestination(d)) || null;
 }
 
-// Trip updates give a vehicle's remaining stops, some with a time. If the vehicle at
-// this platform is due here at the time we're showing, that's a real confirmation
-// rather than an assumption - and the caveat underneath can go.
+// true confirmation, not an assumption, when the trip update's own time for this
+// platform matches the departure being shown - drops the "not confirmed" caveat
 function serviceIsConfirmed(next) {
     if (dwellDepartureMatched) return true;
     if (!next || !platform) return false;
@@ -734,10 +707,9 @@ function stopName(stopId) {
     return api.shortStationName(name).replace(/\s+Light Rail$/i, '').trim();
 }
 
-// true when the vehicle is standing at this platform rather than heading for it.
-// heavy rail berths are the platform road itself, so a berth match means it's
-// there. the other feeds give a stop id that means "next stop" just as often as
-// "here", so those need something more.
+// true when the vehicle is standing here rather than heading here - heavy rail
+// berths are the platform road itself, so a berth match settles it. other feeds'
+// stop id means "next stop" just as often as "here", so those need more checks
 function isStandingAt(vehicle, target) {
     if (!vehicle || !target) return false;
     if (target.berthNumber !== null) {
@@ -749,20 +721,15 @@ function isStandingAt(vehicle, target) {
     if (vehicle.stopId === target.stopId) {
         if (vehicle.status === 'STOPPED_AT') return true;
 
-        // Chalmers Street's feed never says STOPPED_AT - a tram sitting at the
-        // platform still reads IN_TRANSIT_TO, so status alone would never place one
-        // there. Sampled over a minute, trams actually at the stop sat 4-63m from
-        // the platform coordinate while approaching ones were 89m or more out.
+        // Chalmers Street's feed never sends STOPPED_AT - distance stands in
+        // (sampled trams at the stop sat 4-63m out, approaching ones 89m+)
         const away = metresFromPlatform(vehicle, target);
         if (away !== null && away <= AT_PLATFORM_M) return true;
     }
 
-    // Metro's stop id can still name the station it last left while it stands here,
-    // so the two tests above can both miss it and the lights sit on "arriving" well
-    // after it pulled in. Its trip says when it was due at this platform, which is
-    // the signal that survives that lag. Distance only sanity-checks it, loosely:
-    // Central's metro platforms are underground, and a train measured 118m from the
-    // platform coordinate while demonstrably stopped at it.
+    // metro's stop id can still name the station it last left while standing here,
+    // missing both tests above - its trip's own due time survives that lag.
+    // distance is just a loose sanity check (underground platforms read stale)
     const booked = tripStopsAhead(vehicle).find(s => s.stopId === target.stopId);
     if (!booked || !booked.time || booked.time * 1000 > Date.now()) return false;
 
@@ -770,26 +737,14 @@ function isStandingAt(vehicle, target) {
     return distance !== null && distance <= AT_PLATFORM_BY_TIME_M;
 }
 
-// A trip update lists the whole trip, start to finish, not just what's ahead - and
-// the vehicle's own stop sequence lags, so a tram already at Haymarket can still
-// report Chinatown, the stop behind it. Walk forward from where the feed says it
-// is, past anything long overdue.
-//
-// The grace matters more than it looks, and the two feeds need very different
-// numbers.
-//
-// Light rail set the original figure. A tram standing at a stop has that stop due
-// seconds ago, so skipping every overdue stop walks straight past the one it is
-// sitting at - checked against 11 trams that agreed only 3 times, worse than not
-// correcting at all. Dwelling trams were under 75s overdue and within 150m, while
-// genuinely missed stops ran 100s+ overdue and several hundred metres away. At 90s
-// the same check agreed 10 times out of 11.
-//
-// Metro is far staler and needs the opposite. Tracking vehicles one at a time, the
-// feed claimed a metro was "heading to" a stop it had already been watched standing
-// at on 608 occasions - a median of 93s after the fact, once by seven minutes. 90s
-// corrects only 76% of those, 45s corrects 97%, and since a metro dwells for 24-25s
-// that still clears a train sitting at a stop without cutting it off.
+// trip update lists the whole trip, not just what's ahead, and the vehicle's own
+// stop sequence lags - a tram at Haymarket can still report Chinatown, the stop
+// behind it. walks forward past anything overdue by more than the grace below.
+// light rail: 90s agreed with reality 10/11 times against real trams (skipping
+// every overdue stop walked past the one being dwelt at, only 3/11). metro is
+// staler still - a stop it had already been seen standing at was still marked
+// "heading to" a median 93s later (once by 7min), so 45s (97% corrected) is used
+// instead of 90s (76%), while still clearing a normal 24-25s dwell
 const STOP_PASSED_GRACE_S = { metro: 45, default: 90 };
 
 function stopPassedGrace(vehicle) {
@@ -805,8 +760,8 @@ function tripStopsAhead(vehicle) {
         ? stops.filter(s => typeof s.sequence !== 'number' || s.sequence >= from)
         : stops.slice();
 
-    // times are sparse, and a late service can have every one of them in the past -
-    // then there's nothing to correct with, so stay where the feed put it
+    // if every stop is in the past (a late service), there's nothing to correct
+    // with - stay where the feed put it
     const cutoff = Date.now() / 1000 - stopPassedGrace(vehicle);
     const firstDue = ahead.findIndex(s => s.time && s.time > cutoff);
     return firstDue > 0 ? ahead.slice(firstDue) : ahead;
@@ -829,9 +784,8 @@ function describeLocation(vehicle) {
     const station = api.getBerthStation(vehicle.stopId);
     if (station) return `At ${station}`;
 
-    // metro and light rail: a numeric stop id and nothing else. The same field
-    // means "where it is" when stopped and "where it's going" when it isn't, so
-    // the status has to come along with the name.
+    // metro/light rail: same stop id field means "here" when stopped and "next"
+    // otherwise, so status has to travel with the name
     if (vehicle.status === 'STOPPED_AT') {
         const at = stopName(vehicle.stopId);
         return at ? `At ${at}` : null;
@@ -841,8 +795,7 @@ function describeLocation(vehicle) {
         return into ? `Arriving at ${into}` : null;
     }
 
-    // in transit is where the lagging stop id bites, so let the trip's own times
-    // pick the stop and only fall back to the feed's when they can't
+    // in transit: prefer the trip's own next stop over the feed's laggy stop id
     const ahead = tripStopsAhead(vehicle)[0];
     const name = stopName(ahead ? ahead.stopId : vehicle.stopId) || stopName(vehicle.stopId);
     return name ? `Next stop ${name}` : null;
@@ -855,18 +808,16 @@ function locationLine(vehicle) {
     return / Loc$/.test(berth) ? berth : (describeLocation(vehicle) || '');
 }
 
-// where a service finishes up. metro and light rail put the vehicle set number in
-// their label ("RS019", "X37-X38") and name no destination anywhere else, so the
-// last stop on the trip is the only way to say where one is going.
+// metro/light rail labels carry a set number ("RS019"), not a destination - the
+// trip's last stop is the only way to say where one's going
 function tripTerminus(vehicle) {
     const stops = vehicle.tripId ? tripUpdates[vehicle.tripId] : null;
     if (!stops || !stops.length) return null;
     return stopName(stops[stops.length - 1].stopId);
 }
 
-// first Central platform still ahead of this vehicle. has to work off the stops
-// ahead rather than the whole trip, or a service that called at Central an hour ago
-// still reads as heading there
+// first Central platform still ahead - stops ahead only, or a service that called
+// an hour ago still reads as heading there
 function upcomingCentralStop(vehicle) {
     for (const stop of tripStopsAhead(vehicle)) {
         const platformHere = api.getCentralPlatformByStopId(stop.stopId);
@@ -875,10 +826,8 @@ function upcomingCentralStop(vehicle) {
     return null;
 }
 
-// Distance is always available, a time only sometimes - many stop updates carry a
-// delay rather than an absolute time. So lead with the metres and add the time in
-// brackets when the feed gives one.
 // minutes until a trip's stop, where the feed gives an absolute time for it
+// (many stop updates carry only a delay, not an absolute time)
 function arrivalMinutes(stop) {
     if (!stop.time) return null;
     const mins = Math.round((stop.time * 1000 - Date.now()) / 60000);
@@ -1154,7 +1103,7 @@ function renderMaps() {
     if (insetMap) insetMap.renderTrains();
 
     const note = main.primaryInView
-        ? `This platform's ${noun()} is ringed in white.`
+        ? `This platform's ${noun()} is highlighted.`
         : `No ${noun()} from this platform is in view right now.`;
 
     // a failed feed would otherwise just look like a quiet map
@@ -1238,8 +1187,7 @@ function render() {
     renderService();
     infoLights.textContent = indicatorText(phase);
 
-    // the same three lines the map hover gives, for the vehicle the lights are
-    // about: which service it is, where it's heading, and where it is right now
+    // same three lines the map hover gives, for the vehicle the lights are about
     const shown = primaryVehicle();
     infoVehicle.textContent = shown
         ? vehicleTooltip(shown, api.getLineCodeFromRouteId(shown.routeId)).service
@@ -1376,13 +1324,13 @@ function fetchStopNames() {
 }
 
 function tick() {
-    if (liveMode) applyPhase(derivePhase());
+    const live = derivePhase();
+    if (liveMode) applyPhase(live);
     render();
 }
 
 function startLive() {
     liveMode = true;
-    resetDwell();
     syncDemoButtons();
     poll();
     if (!pollTimer) pollTimer = setInterval(poll, POLL_MS);

@@ -1,13 +1,6 @@
-// Shared behaviour for the 11dat metro boards (horizontal.js, vertical.js) -
-// station search, resolving input to a real station, and the Metro-only/
-// line-open validation both boards need identically. Same delegation pattern
-// as api.js -> m1Line.js: boards call these directly rather than duplicating
-// the logic, but each board still owns its own DOM/rendering.
-//
-// Every function here takes the calling board instance ("board") and reads/
-// writes its fields directly (board.stopId, board.stopInput, etc.) instead of
-// closing over private state, since the two boards' DOM structures differ too
-// much to share instances of a class.
+// shared search/validate/load logic for horizontal.js and vertical.js. each
+// function takes the calling board instance and reads/writes its fields
+// directly, since the two boards' dom structures differ too much to share a class
 
 import api from '../../api.js';
 
@@ -28,9 +21,7 @@ export function displayStationInfo(board) {
     }
 }
 
-// Wires the station search box: debounced api.searchStops + a suggestions
-// dropdown, identical on both boards. Clicking a suggestion resolves the
-// station immediately and loads it.
+// wires the search box: debounced api.searchStops + a suggestions dropdown
 export function setupStationSearch(board) {
     board.stopInput.addEventListener('input', (e) => handleSearchInput(board, e));
     board.stopInput.addEventListener('keypress', (e) => {
@@ -56,8 +47,7 @@ function handleSearchInput(board, e) {
     board.searchTimeout = setTimeout(async () => {
         try {
             const stops = await api.searchStops(query);
-            // cached so loadDepartures() can reuse this exact search instead of
-            // re-hitting /api/stops for text the user just typed
+            // caches so loadDepartures() can reuse this search, not re-hit /api/stops
             board.lastSearchQuery = query;
             board.lastSearchResults = stops;
             displaySuggestions(board, stops.slice(0, 6));
@@ -92,11 +82,9 @@ function displaySuggestions(board, stops) {
     board.suggestionsEl.style.display = 'block';
 }
 
-// Resolves whatever's typed (name or stop id) to a real station, rejects
-// anything that isn't on the M1, shows the not-open-yet message for the
-// unopened Bankstown extension, then hands off to the board's own
-// fetchAndDisplay(). The board must implement: resetToEmptyState(),
-// showLineOpeningSoon(), fetchAndDisplay().
+// resolves typed text to a real station, rejects non-M1 stops, flags the
+// unopened Bankstown extension, then calls the board's own fetchAndDisplay().
+// board must implement: resetToEmptyState(), showLineOpeningSoon(), fetchAndDisplay()
 export async function loadDepartures(board) {
     const inputValue = board.stopInput.value.trim();
     if (!inputValue) {
@@ -109,8 +97,7 @@ export async function loadDepartures(board) {
     if (!(board.stopId && board.stopName === inputValue)) {
         showStatus(board.statusEl, 'Looking up station...', 'loading');
         try {
-            // reuse the suggestions search if it was for this exact text, rather
-            // than hitting /api/stops again for a query already in hand
+            // reuses the suggestions search if it matches, rather than re-fetching
             const stops = board.lastSearchQuery === inputValue && board.lastSearchResults
                 ? board.lastSearchResults
                 : await api.searchStops(inputValue);
@@ -128,9 +115,7 @@ export async function loadDepartures(board) {
         }
     }
 
-    // both boards only show Metro (M1) departures - reject anything else here.
-    // a broader "is this any real TfNSW stop ID" check is a planned site-wide
-    // feature, not implemented yet
+    // both boards show metro (m1) only - rejects anything else
     if (!api.isM1Station(board.stopName)) {
         showStatus(board.statusEl, `"${inputValue}" is not a valid Metro station`, 'error');
         board.stopId = null;
@@ -139,14 +124,13 @@ export async function loadDepartures(board) {
         return;
     }
 
-    // the Bankstown extension (Marrickville-Bankstown) is a real, selectable
-    // M1 station, it just isn't carrying passengers yet
+    // bankstown extension is a real, selectable m1 station - just not open yet
     if (!api.isM1StationOpen(board.stopName)) {
         if (board.refreshInterval) {
             clearInterval(board.refreshInterval);
             board.refreshInterval = null;
         }
-        showStatus(board.statusEl, `${board.stopName}: line opening soon`, '');
+        showStatus(board.statusEl, `${board.stopName}: No service (line opening soon)`, 'warning');
         board.showLineOpeningSoon();
         return;
     }
@@ -164,7 +148,7 @@ export async function refresh(board) {
     await board.fetchAndDisplay();
 }
 
-// Fetches raw departures for stopId and filters to metro-only - shared by both boards
+// fetches departures for stopId, filters to metro-only
 export async function fetchMetroDepartures(stopId) {
     const rawData = await api.getDeparturesRaw(stopId);
     const departures = api.parseDeparturesRaw(rawData);

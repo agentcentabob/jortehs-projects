@@ -6,8 +6,7 @@ const results = document.getElementById('results');
 const examplesEl = document.getElementById('examples');
 const fleetGrid = document.getElementById('fleetGrid');
 
-// each fleet's brand colour, so a Sydney Trains answer and an NSW TrainLink one
-// don't look identical. Anything else falls back to the sydney trains orange
+// per-operator brand colour, falls back to sydney trains orange
 const OPERATOR_COLOURS = {
     'Sydney Trains': '--sydneytrains',
     'NSW TrainLink': '--nswtl'
@@ -44,13 +43,11 @@ function answerTile(data) {
     const { set, fleet, carriage, formation } = data;
     const carsText = `${set.cars} car${set.cars === 1 ? '' : 's'}`;
 
-    // matched by set number, so there is no one carriage to describe - and the
-    // fleet and formation tiles beside it already say everything else
+    // no single carriage to describe when matched by set number
     let details = '';
 
     if (carriage) {
-        // position is left out rather than guessed where the formation isn't in
-        // running order - see the OSCAR note on the formation tile
+        // position left out where the formation isn't in running order (see OSCAR)
         details = field('Carriage', carriage.number)
             + field('Type', carriage.type)
             + (carriage.position ? field('Position in set', `Car ${carriage.position} of ${set.cars}`) : '')
@@ -172,7 +169,7 @@ async function lookup(query, { focus = false } = {}) {
     }
 
     input.value = trimmed;
-    // keeps the result linkable, without adding a history entry per keystroke
+    // linkable without adding a history entry per keystroke
     const url = new URL(window.location.href);
     url.searchParams.set('q', trimmed);
     window.history.replaceState({}, '', url);
@@ -199,10 +196,8 @@ form.addEventListener('submit', (event) => {
 // ------------------------------------------------------------------ reference
 
 function renderExamples() {
-    // one carriage per fleet, then a couple of set numbers, so both directions are
-    // one click away rather than something you have to read about to discover
-    // the 4 and 6 car Mariyung are separate fleets under one name, so those two
-    // chips need the car count or they read as the same thing twice
+    // one carriage per fleet, plus a couple of set numbers, both directions covered.
+    // 4/6 car Mariyung share a name, so those two chips need the car count
     const nameCounts = {};
     fleets.forEach((fleet) => { nameCounts[fleet.name] = (nameCounts[fleet.name] || 0) + 1; });
 

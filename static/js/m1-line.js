@@ -27,11 +27,9 @@ export function isM1Station(name) {
     return getM1StationIndex(name) !== -1;
 }
 
-// Marrickville-Bankstown (the converted former T3 corridor) is on the M1's
-// public station list but not carrying passengers yet. Kept in M1_LINE_ORDER
-// (so search/next-stop/via-city math still works once it opens) but flagged
-// separately so boards can say "not running yet" instead of pretending there's
-// live data. The unopened section is a contiguous run at the end of the array.
+// Marrickville-Bankstown is on the M1's public station list but not carrying
+// passengers yet - kept in M1_LINE_ORDER so search/next-stop math still works,
+// flagged separately so boards can say "not running yet"
 const FIRST_UNOPENED_INDEX = M1_LINE_ORDER.indexOf('Marrickville');
 
 // true if name is an m1 station that's actually carrying passengers today
@@ -67,10 +65,8 @@ export function getNextStop(currentStation, destination) {
     return null;
 }
 
-// The neighbour on the OTHER side of `station` from a service heading to
-// `destination` - i.e. what a station's other platform would serve. Null if
-// `station` is the line's physical end in that other direction (a genuine
-// terminus, e.g. Tallawong has nothing further north).
+// finds the neighbour on the other side of station - what its other platform
+// serves. null if station is a genuine terminus in that direction
 export function getOppositeNextStop(station, destination) {
     const stationIdx = getM1StationIndex(station);
     const destIdx = getM1StationIndex(destination);

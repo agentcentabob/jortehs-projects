@@ -1,21 +1,17 @@
-// central station platform list, plus the rules for matching a live vehicle to a
-// platform. the stop ids, platform codes and coordinates here were read off
-// departure_mon against the real station - see CLAUDE.md for how they were derived.
+// central station platform list, plus vehicle-to-platform matching rules. stop
+// ids, codes and coordinates read off departure_mon - see CLAUDE.md
 
-// heavy rail platforms 1-25 are contiguous: stop id = PLATFORM_ID_BASE + number.
-// metro (26/27) breaks the pattern and light rail sits on unrelated ids entirely.
+// heavy rail 1-25 are contiguous (stop id = PLATFORM_ID_BASE + number); metro
+// (26/27) breaks the pattern, light rail uses unrelated ids
 const PLATFORM_ID_BASE = 2000320;
 
-// long-distance regional services also use platforms 1-15, and they live in the
-// nswtrains feed rather than sydneytrains
+// regional services also use platforms 1-15, on the nswtrains feed
 const HEAVY_RAIL_FEEDS = ['sydneytrains', 'nswtrains'];
 
-// platform 15 is not a physical platform at Central and is deliberately absent
-const MISSING_PLATFORMS = [15];
+const MISSING_PLATFORMS = [15]; // platform 15 doesn't physically exist
 
-// [lat, lon] per platform, from departure_mon's location.coord.
-// platform 3 had no departures during the sweep, so it is interpolated from its
-// neighbours - close enough for a map pin, but not measured.
+// [lat, lon] per platform, from departure_mon. platform 3 had no departures
+// during the sweep - interpolated from neighbours, good for a pin, not measured
 const PLATFORM_COORDS = {
     p1: [-33.883165, 151.205523],
     p2: [-33.883224, 151.205634],
@@ -46,8 +42,7 @@ const PLATFORM_COORDS = {
     gc: [-33.882422, 151.206686],
     lr1: [-33.884226, 151.207671],
     lr2: [-33.884193, 151.207605],
-    // extrapolated along the Chalmers St alignment - TfNSW publishes no coordinate
-    // for this platform (see the lr3 entry below)
+    // extrapolated along the Chalmers St alignment - tfnsw publishes no coord for it
     lr3: [-33.884160, 151.207539]
 };
 
@@ -58,10 +53,8 @@ function heavyRailPlatform(number) {
         label: `Platform ${number}`,
         stopId: String(PLATFORM_ID_BASE + number),
         feeds: HEAVY_RAIL_FEEDS,
-        // sydneytrains reports signal berths, not stop ids - see matchesPlatform
-        berthNumber: number,
-        // what to call the vehicle in user-facing text on this platform
-        noun: 'train',
+        berthNumber: number, // sydneytrains reports signal berths, not stop ids
+        noun: 'train', // what to call the vehicle in user-facing text
         coord: PLATFORM_COORDS[id],
         group: 'Sydney Trains'
     };
@@ -122,10 +115,8 @@ export const CENTRAL_PLATFORMS = [
         group: 'Light Rail'
     },
     {
-        // physically present, but TfNSW publishes no stop id for it: neither
-        // departure_mon nor the cbdandsoutheast vehicle feed ever reference a third
-        // Chalmers Street platform. Listed so the board matches the real station,
-        // and flagged via unpublished so the UI can say why it has no data.
+        // physically present but tfnsw publishes no stop id for it - listed so the
+        // board matches the real station, flagged unpublished so the ui can explain why
         id: 'lr3',
         label: 'Chalmers Street: Platform 3',
         stopId: null,
@@ -162,8 +153,7 @@ export function getPlatformGroups() {
     return groups;
 }
 
-// bounding box of every platform, used to outline the station precinct on the map
-// rather than dropping one misleading pin on a station this large
+// bounding box of every platform - outlines the precinct instead of one misleading pin
 export function getStationBounds() {
     const coords = CENTRAL_PLATFORMS.map(p => p.coord).filter(Boolean);
     return {
@@ -174,13 +164,10 @@ export function getStationBounds() {
     };
 }
 
-// Central's terminal platforms (1-15) are officially called Sydney Terminal, so the
-// feed names their berths "Sydney 12 Loc" rather than "Central 12 Loc". Platforms
-// 16-27 use "Central 17 Loc". Both are the same station, so we have to accept both
-// names or platforms 1-15 never register a train at all.
-// The station name has to sit right after the dot. Without that anchor
-// "NorthSydney.North Sydney 2 Loc" ends in "Sydney 2 Loc" and gets read as
-// Central platform 2, which put North Sydney's trains on this board.
+// platforms 1-15 are officially Sydney Terminal, so the feed names their berths
+// "Sydney 12 Loc" not "Central 12 Loc"; 16-27 use "Central 17 Loc" - accept both
+// or platforms 1-15 never register. Anchored to the dot, or "NorthSydney.North
+// Sydney 2 Loc" misreads as Central platform 2
 const BERTH_PATTERN = /(?:^|\.)(Central|Sydney) (\d+) Loc$/;
 const SYDNEY_TERMINAL_MAX_PLATFORM = 15;
 
@@ -189,16 +176,13 @@ export function getBerthPlatformNumber(stopId) {
     if (!match) return null;
 
     const number = parseInt(match[2], 10);
-    // "Sydney" only ever means the terminal platforms, so a high number under that
-    // name isn't one of ours
+    // "Sydney" only ever means the terminal platforms - a high number under it isn't ours
     if (match[1] === 'Sydney' && number > SYDNEY_TERMINAL_MAX_PLATFORM) return null;
     return number;
 }
 
-// sydneytrains berths that sit at a platform are named "<Area>.<Station> <n> Loc"
-// (e.g. "Sydney.Redfern 6 Loc", "Sefton.Regents Park 2 Loc"). The area prefix is
-// NOT the station - the station is the part after the dot. Berths between stations
-// look like "Sydney.SY522 Entry Loc" and deliberately do not match.
+// sydneytrains berths at a platform: "<Area>.<Station> <n> Loc" - the station is
+// the part after the dot, not the area prefix. "Sydney.SY522 Entry Loc" deliberately doesn't match
 const BERTH_STATION_PATTERN = /([A-Za-z][A-Za-z ]*) (\d+) Loc$/;
 
 export function getBerthStation(stopId) {
@@ -206,20 +190,15 @@ export function getBerthStation(stopId) {
     return match ? match[1].trim() : null;
 }
 
-// Signal berths in the throat immediately outside Central's platforms, all within
-// about 200 m of the station. Collected by sampling the live feed and sorting by
-// distance, so it may not be exhaustive - an unlisted berth just means the board
-// treats a departing train as clear of the station slightly early.
+// signal berths in the throat just outside Central's platforms (~200m), collected
+// by sampling the live feed - not necessarily exhaustive
 const CENTRAL_APPROACH_BERTHS = new Set([
     'SY354', 'SY357', 'SY362', 'SY363', 'SY365', 'SY366', 'SY367', 'SY370',
     'SY371', 'SY372', 'SY373', 'SY374', 'SY379', 'SY389', 'SY395'
 ]);
 
-// The berth a train passes through immediately before it enters each platform,
-// read off the RailSafe signalling diagrams for Central. Platforms 19, 22 and 23
-// were also seen doing exactly this in the live feed, which is a useful check on
-// the rest. Platforms 1-15 aren't listed: their berths are the platform roads
-// themselves, so there is no separate run-in signal to key off.
+// run-in berth for each platform, from RailSafe's Central signalling diagrams.
+// platforms 1-15 aren't listed - their berths are the platform roads themselves
 const PLATFORM_APPROACH_BERTHS = {
     16: ['SY380'],   // northbound
     17: ['SY382'],   // northbound
@@ -252,10 +231,8 @@ export function isInCentralStationArea(stopId) {
     return berthCodes(stopId).some(code => CENTRAL_APPROACH_BERTHS.has(code));
 }
 
-// true if this vehicle is sitting at (or arriving into) the given platform.
-// two strategies, because the feeds disagree on how they report position:
-//   - metro/lightrail/nswtrains give a numeric stop id matching our platform stop id
-//   - sydneytrains gives a signal berth string and no stop id we can match directly
+// checks if a vehicle is at/arriving into a platform - two strategies since feeds
+// disagree: metro/lightrail/nswtrains match by stop id, sydneytrains by berth
 export function matchesPlatform(vehicle, platform) {
     if (!vehicle || !platform) return false;
     if (vehicle.stopId && vehicle.stopId === platform.stopId) return true;
