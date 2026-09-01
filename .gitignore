@@ -12,6 +12,7 @@ settings.local.json
 
 # other
 todo.md
+11dat-development-process.md
 __pycache__/
 *.pyc
 
